@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "MongoDB": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mongodb-mcp-server",
+        "--connectionString",
+        "mongodb+srv://gravelmatch_user:Zr11tv11@cyclopower.uwgrzys.mongodb.net/",
+        "--readOnly"
+      ]
+    }
+  }
+}
