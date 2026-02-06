@@ -1,29 +1,41 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import connectDB from '@/lib/db';
-import User from '@/models/User';
-import { profileSchema, apiResponse, apiError, calculateCogganZones } from '@/types';
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { getDb } from "@/lib/mongodb";
+import { generatePowerZones } from "@/lib/cycling-metrics";
 
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json(apiError('Non autenticato'), { status: 401 });
+      return NextResponse.json(
+        { success: false, error: "Non autorizzato" },
+        { status: 401 }
+      );
     }
 
-    const userId = (session.user as { id: string }).id;
-    await connectDB();
+    const db = await getDb();
+    const user = await db
+      .collection("users")
+      .findOne(
+        { email: session.user.email },
+        { projection: { password: 0 } }
+      );
 
-    const user = await User.findById(userId).select('-passwordHash').lean();
     if (!user) {
-      return NextResponse.json(apiError('Utente non trovato'), { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Utente non trovato" },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json(apiResponse(user));
+    return NextResponse.json({ success: true, data: user });
   } catch (error) {
-    console.error('Profile GET error:', error);
-    return NextResponse.json(apiError('Errore nel recupero profilo'), { status: 500 });
+    console.error("Get profile error:", error);
+    return NextResponse.json(
+      { success: false, error: "Errore nel caricamento profilo" },
+      { status: 500 }
+    );
   }
 }
 
@@ -31,51 +43,41 @@ export async function PUT(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json(apiError('Non autenticato'), { status: 401 });
-    }
-
-    const userId = (session.user as { id: string }).id;
-    const body = await req.json();
-    const parsed = profileSchema.safeParse(body);
-
-    if (!parsed.success) {
       return NextResponse.json(
-        apiError(parsed.error.errors[0].message),
-        { status: 400 }
+        { success: false, error: "Non autorizzato" },
+        { status: 401 }
       );
     }
 
-    await connectDB();
+    const updates = await req.json();
+    const db = await getDb();
 
-    const updateData: Record<string, unknown> = {
-      'profile.ftp': parsed.data.ftp,
-      'profile.weight': parsed.data.weight,
-    };
+    const allowedFields = ["name", "ftp", "weight", "powerZones", "hrZones"];
+    const sanitized: Record<string, unknown> = {};
 
-    // Auto-calculate power zones from FTP if not provided
-    if (parsed.data.powerZones) {
-      updateData['profile.powerZones'] = parsed.data.powerZones;
-    } else {
-      updateData['profile.powerZones'] = calculateCogganZones(parsed.data.ftp);
+    for (const key of allowedFields) {
+      if (updates[key] !== undefined) {
+        sanitized[key] = updates[key];
+      }
     }
 
-    if (parsed.data.heartRateZones) {
-      updateData['profile.heartRateZones'] = parsed.data.heartRateZones;
+    // Auto-generate power zones if FTP changed and zones not provided
+    if (sanitized.ftp && !sanitized.powerZones) {
+      sanitized.powerZones = generatePowerZones(sanitized.ftp as number);
     }
 
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { $set: updateData },
-      { new: true }
-    ).select('-passwordHash').lean();
+    sanitized.updatedAt = new Date();
 
-    if (!user) {
-      return NextResponse.json(apiError('Utente non trovato'), { status: 404 });
-    }
+    await db
+      .collection("users")
+      .updateOne({ email: session.user.email }, { $set: sanitized });
 
-    return NextResponse.json(apiResponse(user));
+    return NextResponse.json({ success: true, data: sanitized });
   } catch (error) {
-    console.error('Profile PUT error:', error);
-    return NextResponse.json(apiError('Errore nell\'aggiornamento profilo'), { status: 500 });
+    console.error("Update profile error:", error);
+    return NextResponse.json(
+      { success: false, error: "Errore nell'aggiornamento profilo" },
+      { status: 500 }
+    );
   }
 }

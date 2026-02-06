@@ -1,66 +1,58 @@
-import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
-import connectDB from '@/lib/db';
-import User from '@/models/User';
-import { registerSchema, apiResponse, apiError, calculateCogganZones } from '@/types';
+import { NextRequest, NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
+import { getDb } from "@/lib/mongodb";
+import { generatePowerZones } from "@/lib/cycling-metrics";
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const parsed = registerSchema.safeParse(body);
+    const { email, password, name } = await req.json();
 
-    if (!parsed.success) {
+    if (!email || !password || !name) {
       return NextResponse.json(
-        apiError(parsed.error.errors[0].message),
+        { success: false, error: "Tutti i campi sono obbligatori" },
         { status: 400 }
       );
     }
 
-    const { email, password, name } = parsed.data;
+    const db = await getDb();
+    const existing = await db.collection("users").findOne({ email });
 
-    await connectDB();
-
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
+    if (existing) {
       return NextResponse.json(
-        apiError('Email già registrata'),
+        { success: false, error: "Email già registrata" },
         { status: 409 }
       );
     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
-    const defaultFTP = 200;
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const defaultFtp = 200;
 
-    const user = await User.create({
-      email: email.toLowerCase(),
+    const result = await db.collection("users").insertOne({
+      email,
+      password: hashedPassword,
       name,
-      passwordHash,
-      profile: {
-        ftp: defaultFTP,
-        weight: 70,
-        powerZones: calculateCogganZones(defaultFTP),
-        heartRateZones: [
-          { name: 'Z1 - Recovery', min: 0, max: 120 },
-          { name: 'Z2 - Aerobic', min: 121, max: 140 },
-          { name: 'Z3 - Tempo', min: 141, max: 160 },
-          { name: 'Z4 - Threshold', min: 161, max: 175 },
-          { name: 'Z5 - Max', min: 176, max: 220 },
-        ],
+      ftp: defaultFtp,
+      weight: 70,
+      powerZones: generatePowerZones(defaultFtp),
+      hrZones: {
+        z1: { min: 0, max: 120 },
+        z2: { min: 120, max: 140 },
+        z3: { min: 140, max: 160 },
+        z4: { min: 160, max: 175 },
+        z5: { min: 175, max: 200 },
       },
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
 
-    return NextResponse.json(
-      apiResponse({
-        id: user._id.toString(),
-        email: user.email,
-        name: user.name,
-      }),
-      { status: 201 }
-    );
+    return NextResponse.json({
+      success: true,
+      data: { userId: result.insertedId.toString() },
+    });
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error("Registration error:", error);
     return NextResponse.json(
-      apiError('Errore durante la registrazione'),
+      { success: false, error: "Errore durante la registrazione" },
       { status: 500 }
     );
   }

@@ -1,60 +1,61 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import connectDB from '@/lib/db';
-import Activity from '@/models/Activity';
-import { calculateFitnessTimeSeries } from '@/lib/calculations';
-import { apiResponse, apiError } from '@/types';
-import { subDays } from 'date-fns';
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { getDb } from "@/lib/mongodb";
+import { calculatePMC } from "@/lib/cycling-metrics";
+import { format, subDays, eachDayOfInterval } from "date-fns";
 
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json(apiError('Non autenticato'), { status: 401 });
+      return NextResponse.json(
+        { success: false, error: "Non autorizzato" },
+        { status: 401 }
+      );
     }
 
-    const userId = (session.user as { id: string }).id;
     const { searchParams } = new URL(req.url);
-    const days = parseInt(searchParams.get('days') || '90');
+    const days = parseInt(searchParams.get("days") || "90");
+    const userId = (session.user as { id: string }).id;
 
-    await connectDB();
+    const db = await getDb();
+    const startDate = subDays(new Date(), days);
 
-    // Get all activities for this user (we need full history for accurate CTL/ATL)
-    const activities = await Activity.find({ userId })
+    const activities = await db
+      .collection("activities")
+      .find({
+        userId,
+        activityDate: { $gte: startDate },
+      })
       .sort({ activityDate: 1 })
-      .select('activityDate tss')
-      .lean();
+      .toArray();
 
-    if (activities.length === 0) {
-      return NextResponse.json(apiResponse({ data: [], summary: { ctl: 0, atl: 0, tsb: 0 } }));
+    // Build daily TSS map
+    const tssMap = new Map<string, number>();
+    for (const a of activities) {
+      const dateKey = format(new Date(a.activityDate), "yyyy-MM-dd");
+      tssMap.set(dateKey, (tssMap.get(dateKey) || 0) + (a.tss || 0));
     }
 
-    // Calculate fitness time series
-    const dailyTSS = activities.map(a => ({
-      date: new Date(a.activityDate),
-      tss: a.tss,
+    // Fill all days in range
+    const allDays = eachDayOfInterval({ start: startDate, end: new Date() });
+    const dailyTSS = allDays.map((d) => ({
+      date: format(d, "yyyy-MM-dd"),
+      tss: tssMap.get(format(d, "yyyy-MM-dd")) || 0,
     }));
 
-    const fullTimeSeries = calculateFitnessTimeSeries(dailyTSS);
+    const pmc = calculatePMC(dailyTSS);
 
-    // Filter to requested range
-    const cutoff = subDays(new Date(), days);
-    const filtered = fullTimeSeries.filter(d => d.date >= cutoff);
-
-    // Current values
-    const latest = fullTimeSeries[fullTimeSeries.length - 1];
-
-    return NextResponse.json(apiResponse({
-      data: filtered,
-      summary: {
-        ctl: latest?.ctl || 0,
-        atl: latest?.atl || 0,
-        tsb: latest?.tsb || 0,
-      },
-    }));
+    return NextResponse.json({
+      success: true,
+      data: pmc,
+    });
   } catch (error) {
-    console.error('PMC error:', error);
-    return NextResponse.json(apiError('Errore nel calcolo PMC'), { status: 500 });
+    console.error("PMC error:", error);
+    return NextResponse.json(
+      { success: false, error: "Errore nel calcolo PMC" },
+      { status: 500 }
+    );
   }
 }

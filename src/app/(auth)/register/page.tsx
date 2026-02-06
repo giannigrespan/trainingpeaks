@@ -1,118 +1,133 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Zap } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError("");
     setLoading(true);
+    setError("");
+
+    const formData = new FormData(e.currentTarget);
+    const password = formData.get("password") as string;
+    const confirm = formData.get("confirmPassword") as string;
+
+    if (password !== confirm) {
+      setError("Le password non coincidono");
+      setLoading(false);
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("La password deve essere di almeno 8 caratteri");
+      setLoading(false);
+      return;
+    }
 
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({
+          name: formData.get("name"),
+          email: formData.get("email"),
+          password,
+        }),
       });
 
       const data = await res.json();
 
-      if (!data.success) {
+      if (!res.ok) {
         setError(data.error || "Errore durante la registrazione");
         setLoading(false);
         return;
       }
 
-      // Auto-login after registration
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        router.push("/login");
-      } else {
-        router.push("/settings");
-      }
+      router.push("/login?registered=true");
     } catch {
       setError("Errore di connessione");
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--color-surface)] px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <div className="w-10 h-10 bg-[var(--color-primary)] rounded-xl flex items-center justify-center">
-              <span className="text-white font-bold">CP</span>
-            </div>
-            <span className="text-2xl font-bold text-[var(--color-primary)]">CycloPower</span>
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
+            <Zap className="h-6 w-6 text-blue-600" />
           </div>
-          <p className="text-[var(--color-text-secondary)]">
-            Crea il tuo account gratuito
-          </p>
-        </div>
-
-        <div className="bg-white rounded-xl border border-[var(--color-border)] p-8 shadow-sm">
+          <CardTitle className="text-2xl">Crea il tuo account</CardTitle>
+        </CardHeader>
+        <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <Input
-              label="Nome"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Mario Rossi"
-              required
-              minLength={2}
-            />
-            <Input
-              label="Email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="mario@esempio.it"
-              required
-            />
-            <Input
-              label="Password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Min 8 caratteri"
-              required
-              minLength={8}
-            />
             {error && (
-              <p className="text-sm text-[var(--color-error)]">{error}</p>
+              <div className="rounded-md bg-red-50 p-3 text-sm text-red-600">
+                {error}
+              </div>
             )}
-            <Button type="submit" loading={loading} className="w-full">
-              Registrati
+            <div className="space-y-2">
+              <Label htmlFor="name">Nome</Label>
+              <Input
+                id="name"
+                name="name"
+                placeholder="Mario Rossi"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                placeholder="mario@example.com"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                minLength={8}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Conferma Password</Label>
+              <Input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                minLength={8}
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Registrazione..." : "Registrati"}
             </Button>
           </form>
-        </div>
-
-        <p className="text-center mt-4 text-sm text-[var(--color-text-secondary)]">
-          Hai già un account?{" "}
-          <Link href="/login" className="text-[var(--color-primary)] hover:underline font-medium">
-            Accedi
-          </Link>
-        </p>
-      </div>
+          <p className="mt-4 text-center text-sm text-gray-500">
+            Hai già un account?{" "}
+            <Link href="/login" className="text-blue-600 hover:underline">
+              Accedi
+            </Link>
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }
