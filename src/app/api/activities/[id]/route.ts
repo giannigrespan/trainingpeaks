@@ -1,96 +1,92 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import connectDB from '@/lib/db';
-import Activity from '@/models/Activity';
-import ActivityStream from '@/models/ActivityStream';
-import { apiResponse, apiError } from '@/types';
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { ObjectId } from "mongodb";
+import { authOptions } from "@/lib/auth";
+import { getDb } from "@/lib/mongodb";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json(apiError('Non autenticato'), { status: 401 });
+      return NextResponse.json(
+        { success: false, error: "Non autorizzato" },
+        { status: 401 }
+      );
     }
 
-    const { id } = await params;
+    const db = await getDb();
     const userId = (session.user as { id: string }).id;
 
-    await connectDB();
-    const activity = await Activity.findOne({ _id: id, userId }).lean();
+    const activity = await db.collection("activities").findOne({
+      _id: new ObjectId(params.id),
+      userId,
+    });
 
     if (!activity) {
-      return NextResponse.json(apiError('Attività non trovata'), { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Attività non trovata" },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json(apiResponse(activity));
+    const streams = await db.collection("activity_streams").findOne({
+      activityId: params.id,
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: { activity, streams },
+    });
   } catch (error) {
-    console.error('Activity detail error:', error);
-    return NextResponse.json(apiError('Errore nel recupero attività'), { status: 500 });
-  }
-}
-
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json(apiError('Non autenticato'), { status: 401 });
-    }
-
-    const { id } = await params;
-    const userId = (session.user as { id: string }).id;
-    const { name } = await req.json();
-
-    await connectDB();
-    const activity = await Activity.findOneAndUpdate(
-      { _id: id, userId },
-      { name },
-      { new: true }
-    ).lean();
-
-    if (!activity) {
-      return NextResponse.json(apiError('Attività non trovata'), { status: 404 });
-    }
-
-    return NextResponse.json(apiResponse(activity));
-  } catch (error) {
-    console.error('Activity update error:', error);
-    return NextResponse.json(apiError('Errore nell\'aggiornamento'), { status: 500 });
+    console.error("Get activity error:", error);
+    return NextResponse.json(
+      { success: false, error: "Errore nel caricamento attività" },
+      { status: 500 }
+    );
   }
 }
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json(apiError('Non autenticato'), { status: 401 });
+      return NextResponse.json(
+        { success: false, error: "Non autorizzato" },
+        { status: 401 }
+      );
     }
 
-    const { id } = await params;
+    const db = await getDb();
     const userId = (session.user as { id: string }).id;
 
-    await connectDB();
-    const activity = await Activity.findOneAndDelete({ _id: id, userId });
+    const result = await db.collection("activities").deleteOne({
+      _id: new ObjectId(params.id),
+      userId,
+    });
 
-    if (!activity) {
-      return NextResponse.json(apiError('Attività non trovata'), { status: 404 });
+    if (result.deletedCount === 0) {
+      return NextResponse.json(
+        { success: false, error: "Attività non trovata" },
+        { status: 404 }
+      );
     }
 
-    // Delete associated streams
-    await ActivityStream.deleteOne({ activityId: id });
+    await db
+      .collection("activity_streams")
+      .deleteOne({ activityId: params.id });
 
-    return NextResponse.json(apiResponse({ deleted: true }));
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Activity delete error:', error);
-    return NextResponse.json(apiError('Errore nell\'eliminazione'), { status: 500 });
+    console.error("Delete activity error:", error);
+    return NextResponse.json(
+      { success: false, error: "Errore nell'eliminazione" },
+      { status: 500 }
+    );
   }
 }

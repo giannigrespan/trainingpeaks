@@ -1,16 +1,14 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Providers } from "@/components/layout/Providers";
+import { Providers } from "@/components/providers";
+import { Toaster } from "@/components/ui/toaster";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "CycloPower - Training Analytics per Ciclisti",
-  description: "Piattaforma di analisi avanzata degli allenamenti di ciclismo con misuratore di potenza. TSS, NP, CTL/ATL, Power Curves e molto altro.",
+  title: "CycloPower - Cycling Analytics",
+  description: "Analisi avanzata per ciclisti con misuratore di potenza",
 };
 
 export default function RootLayout({
@@ -20,8 +18,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="it">
-      <body className={`${inter.variable} font-sans antialiased`}>
-        <Providers>{children}</Providers>
+      <body className={`${inter.className} antialiased`}>
+        <Providers>
+          {children}
+          <Toaster />
+        </Providers>
       </body>
     </html>
   );
