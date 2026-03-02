@@ -1,4 +1,5 @@
 const WAHOO_BASE_URL = "https://api.wahooligan.com";
+const WAHOO_APP_URL = "https://trainingpeaks.vercel.app";
 
 export interface WahooTokens {
   accessToken: string;
@@ -17,7 +18,7 @@ export interface WahooWorkout {
 export function getAuthorizationUrl(state: string): string {
   const params = new URLSearchParams({
     client_id: process.env.WAHOO_CLIENT_ID!,
-    redirect_uri: `${process.env.NEXTAUTH_URL}/api/integrations/wahoo/callback`,
+    redirect_uri: `${WAHOO_APP_URL}/api/integrations/wahoo/callback`,
     response_type: "code",
     scope: "user_read workouts_read",
     state,
@@ -34,7 +35,7 @@ export async function exchangeCodeForTokens(code: string): Promise<WahooTokens> 
       code,
       client_id: process.env.WAHOO_CLIENT_ID!,
       client_secret: process.env.WAHOO_CLIENT_SECRET!,
-      redirect_uri: `${process.env.NEXTAUTH_URL}/api/integrations/wahoo/callback`,
+      redirect_uri: `${WAHOO_APP_URL}/api/integrations/wahoo/callback`,
     }),
   });
   if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);

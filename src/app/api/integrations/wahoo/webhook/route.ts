@@ -9,6 +9,17 @@ import { importFitBuffer } from "@/lib/activity-importer";
 
 export async function POST(req: NextRequest) {
   try {
+    // Validate webhook token sent by Wahoo in the Authorization header
+    const expectedToken = process.env.WAHOO_WEBHOOK_TOKEN;
+    if (expectedToken) {
+      const authHeader = req.headers.get("authorization") ?? "";
+      const incomingToken = authHeader.replace(/^Bearer\s+/i, "").trim();
+      if (incomingToken !== expectedToken) {
+        console.warn("[Wahoo webhook] Invalid token – request rejected");
+        return NextResponse.json({ success: false }, { status: 401 });
+      }
+    }
+
     const body = await req.json();
 
     if (body.event_type !== "workout_summary") {

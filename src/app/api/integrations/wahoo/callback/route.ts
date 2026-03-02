@@ -13,7 +13,8 @@ export async function GET(req: NextRequest) {
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
-  const redirectBase = `${process.env.NEXTAUTH_URL}/settings`;
+  const WAHOO_APP_URL = "https://trainingpeaks.vercel.app";
+  const redirectBase = `${WAHOO_APP_URL}/settings`;
 
   if (error) {
     return NextResponse.redirect(`${redirectBase}?wahoo=error&reason=${error}`);
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
     const tokens = await exchangeCodeForTokens(code);
     const wahooUserId = await getWahooUserId(tokens.accessToken);
 
-    const webhookUrl = `${process.env.NEXTAUTH_URL}/api/integrations/wahoo/webhook`;
+    const webhookUrl = `${WAHOO_APP_URL}/api/integrations/wahoo/webhook`;
     let webhookId: string | null = null;
     let webhookSecret: string | null = null;
     try {
