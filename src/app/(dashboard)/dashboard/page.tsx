@@ -8,13 +8,16 @@ import {
   Activity,
   Clock,
   Zap,
-  TrendingUp,
   ChevronRight,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Upload,
   Trash2,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { PMCChart } from "@/components/charts/pmc-chart";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface ActivitySummary {
   _id: string;
@@ -25,18 +28,110 @@ interface ActivitySummary {
   tss: number;
   normalizedPower: number;
   avgPower: number;
-  avgHR: number;
+  intensityFactor: number;
 }
+
+interface PMCEntry {
+  date: string;
+  ctl: number;
+  atl: number;
+  tsb: number;
+  tss: number;
+}
+
+interface PowerZones {
+  z1: { min: number; max: number };
+  z2: { min: number; max: number };
+  z3: { min: number; max: number };
+  z4: { min: number; max: number };
+  z5: { min: number; max: number };
+}
+
+// ─── MetricCard ───────────────────────────────────────────────────────────────
+
+function MetricCard({
+  title,
+  value,
+  delta,
+  deltaLabel,
+  color,
+}: {
+  title: string;
+  value: string;
+  delta?: number;
+  deltaLabel?: string;
+  color: "blue" | "orange" | "emerald" | "rose";
+}) {
+  const accentColor = {
+    blue: "text-blue-500",
+    orange: "text-orange-500",
+    emerald: "text-emerald-500",
+    rose: "text-rose-500",
+  }[color];
+
+  const DeltaIcon =
+    delta === undefined || delta === 0 ? Minus : delta > 0 ? TrendingUp : TrendingDown;
+  const deltaColor =
+    delta === undefined || delta === 0
+      ? "text-zinc-400"
+      : delta > 0
+        ? "text-emerald-500"
+        : "text-rose-500";
+
+  return (
+    <div className="p-5 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+      <div className="flex items-start justify-between mb-2">
+        <span className="text-zinc-500 dark:text-zinc-400 text-xs font-semibold uppercase tracking-wider">
+          {title}
+        </span>
+        <TrendingUp className={`h-3.5 w-3.5 ${accentColor}`} />
+      </div>
+      <div className="text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100">
+        {value}
+      </div>
+      {delta !== undefined && (
+        <div className={`flex items-center gap-1 text-xs mt-1 font-medium ${deltaColor}`}>
+          <DeltaIcon className="h-3 w-3" />
+          {delta > 0 ? "+" : ""}
+          {delta.toFixed(1)} {deltaLabel ?? ""}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const ZONE_COLORS = [
+  "bg-zinc-300 dark:bg-zinc-600",
+  "bg-blue-400",
+  "bg-emerald-400",
+  "bg-orange-400",
+  "bg-rose-500",
+];
+const ZONE_NAMES = ["Z1 Recovery", "Z2 Endurance", "Z3 Tempo", "Z4 Threshold", "Z5 VO2max"];
+const ZONE_KEYS = ["z1", "z2", "z3", "z4", "z5"] as const;
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const [activities, setActivities] = useState<ActivitySummary[]>([]);
+  const [pmcData, setPmcData] = useState<PMCEntry[]>([]);
+  const [powerZones, setPowerZones] = useState<PowerZones | null>(null);
+  const [ftp, setFtp] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/activities?limit=10")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) setActivities(data.data);
+    Promise.all([
+      fetch("/api/activities?limit=10").then((r) => r.json()),
+      fetch("/api/analytics/pmc?days=90").then((r) => r.json()),
+      fetch("/api/user/profile").then((r) => r.json()),
+    ])
+      .then(([actRes, pmcRes, profileRes]) => {
+        if (actRes.success) setActivities(actRes.data);
+        if (pmcRes.success) setPmcData(pmcRes.data);
+        if (profileRes.success && profileRes.data) {
+          setPowerZones(profileRes.data.powerZones ?? null);
+          setFtp(profileRes.data.ftp ?? 0);
+        }
       })
       .finally(() => setLoading(false));
   }, []);
@@ -49,172 +144,269 @@ export default function DashboardPage() {
     if (res.ok) setActivities((prev) => prev.filter((a) => a._id !== id));
   }
 
-  // Weekly summary
-  const now = new Date();
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - now.getDay() + 1);
-  weekStart.setHours(0, 0, 0, 0);
-
-  const weekActivities = activities.filter(
-    (a) => new Date(a.activityDate) >= weekStart
-  );
-  const weekTSS = weekActivities.reduce((s, a) => s + (a.tss || 0), 0);
-  const weekHours = weekActivities.reduce((s, a) => s + (a.duration || 0), 0) / 3600;
-  const weekKm = weekActivities.reduce((s, a) => s + (a.distance || 0), 0) / 1000;
-
-  function formatDuration(seconds: number) {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
+  function formatDuration(s: number) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
   }
 
+  // PMC metrics
+  const lastPmc = pmcData.at(-1) ?? null;
+  const prevPmc = pmcData.length > 1 ? pmcData.at(-2)! : null;
+
+  // IF Medio
+  const ifValues = activities.filter((a) => a.intensityFactor > 0).map((a) => a.intensityFactor);
+  const avgIF = ifValues.length > 0 ? ifValues.reduce((s, v) => s + v, 0) / ifValues.length : 0;
+
+  // Weekly
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
+  weekStart.setHours(0, 0, 0, 0);
+  const weekActs = activities.filter((a) => new Date(a.activityDate) >= weekStart);
+  const weekTSS = weekActs.reduce((s, a) => s + (a.tss || 0), 0);
+  const weekHours = weekActs.reduce((s, a) => s + a.duration, 0) / 3600;
+  const weekKm = weekActs.reduce((s, a) => s + a.distance, 0) / 1000;
+
+  const lastActivity = activities[0] ?? null;
+  const maxPower = ftp * 1.5 || 400;
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-sm text-gray-500">Riepilogo settimanale e attività recenti</p>
+      {/* Page header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+            Dashboard
+          </h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+            Questa settimana: {weekActs.length} allenamenti · {weekHours.toFixed(1)}h ·{" "}
+            {weekKm.toFixed(0)} km · TSS {Math.round(weekTSS)}
+          </p>
+        </div>
+        <Link
+          href="/upload"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl shadow-sm shadow-blue-500/20 transition-colors flex-shrink-0"
+        >
+          <Upload className="h-4 w-4" />
+          Carica attività
+        </Link>
       </div>
 
-      {/* Weekly Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-purple-100 p-2">
-                <Zap className="h-5 w-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">TSS Settimana</p>
-                <p className="text-2xl font-bold tabular-nums">{Math.round(weekTSS)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-blue-100 p-2">
-                <Clock className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Ore Settimana</p>
-                <p className="text-2xl font-bold tabular-nums">{weekHours.toFixed(1)}h</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-green-100 p-2">
-                <TrendingUp className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Km Settimana</p>
-                <p className="text-2xl font-bold tabular-nums">{weekKm.toFixed(0)} km</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-orange-100 p-2">
-                <Activity className="h-5 w-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Allenamenti</p>
-                <p className="text-2xl font-bold tabular-nums">{weekActivities.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* ── Bento grid ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
-      {/* PMC Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Performance Management Chart</CardTitle>
-        </CardHeader>
-        <CardContent>
+        {/* Row 1 — 4 metric cards */}
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-24 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-800" />
+          ))
+        ) : (
+          <>
+            <MetricCard
+              title="CTL – Fitness"
+              value={lastPmc ? lastPmc.ctl.toFixed(1) : "—"}
+              delta={lastPmc && prevPmc ? +(lastPmc.ctl - prevPmc.ctl).toFixed(1) : undefined}
+              deltaLabel="vs ieri"
+              color="blue"
+            />
+            <MetricCard
+              title="ATL – Fatica"
+              value={lastPmc ? lastPmc.atl.toFixed(1) : "—"}
+              delta={lastPmc && prevPmc ? +(lastPmc.atl - prevPmc.atl).toFixed(1) : undefined}
+              deltaLabel="vs ieri"
+              color="orange"
+            />
+            <MetricCard
+              title="TSB – Forma"
+              value={lastPmc ? (lastPmc.tsb >= 0 ? "+" : "") + lastPmc.tsb.toFixed(1) : "—"}
+              delta={lastPmc && prevPmc ? +(lastPmc.tsb - prevPmc.tsb).toFixed(1) : undefined}
+              deltaLabel="vs ieri"
+              color={lastPmc && lastPmc.tsb >= 0 ? "emerald" : "rose"}
+            />
+            <MetricCard
+              title="IF Medio"
+              value={avgIF > 0 ? avgIF.toFixed(2) : "—"}
+              color="emerald"
+            />
+          </>
+        )}
+
+        {/* Row 2 — PMC (3-col) + Last activity (1-col) */}
+        <div className="lg:col-span-3 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-6">
+          <div className="mb-4">
+            <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-100">
+              Performance Management Chart
+            </h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              CTL · ATL · TSB con TSS giornaliero
+            </p>
+          </div>
           <PMCChart />
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Recent Activities */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Attività Recenti</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <div className="lg:col-span-1 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-6 flex flex-col">
+          <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-100 mb-4">
+            Ultimo allenamento
+          </h3>
+          {loading ? (
+            <div className="flex-1 space-y-2">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-6 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+              ))}
+            </div>
+          ) : lastActivity ? (
+            <>
+              <div className="flex-1 space-y-3">
+                <p className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 leading-tight">
+                  {lastActivity.name}
+                </p>
+                <p className="text-xs text-zinc-400">
+                  {format(new Date(lastActivity.activityDate), "d MMMM yyyy", { locale: it })}
+                </p>
+                <div className="space-y-2 pt-1">
+                  {[
+                    { label: "Durata", value: formatDuration(lastActivity.duration) },
+                    { label: "Distanza", value: `${(lastActivity.distance / 1000).toFixed(1)} km` },
+                    { label: "TSS", value: lastActivity.tss > 0 ? String(lastActivity.tss) : "—" },
+                    {
+                      label: "NP",
+                      value: lastActivity.normalizedPower > 0 ? `${lastActivity.normalizedPower}W` : "—",
+                    },
+                  ].map(({ label, value }) => (
+                    <div
+                      key={label}
+                      className="flex justify-between text-sm border-b border-zinc-100 dark:border-zinc-800 pb-1.5"
+                    >
+                      <span className="text-zinc-500 dark:text-zinc-400">{label}</span>
+                      <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+                        {value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <Link
+                href={`/activities/${lastActivity._id}`}
+                className="mt-4 block w-full py-2.5 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl text-sm font-bold text-center hover:opacity-90 transition-opacity"
+              >
+                Apri attività
+              </Link>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 py-4">
+              <Activity className="h-10 w-10 text-zinc-200 dark:text-zinc-700" />
+              <p className="text-sm text-zinc-500">Nessuna attività ancora</p>
+              <Link
+                href="/upload"
+                className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Carica il primo file .fit
+              </Link>
+            </div>
+          )}
+        </div>
+
+        {/* Row 3 — Recent activities (2-col) + Power zones (2-col) */}
+        <div className="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-100">
+              Attività recenti
+            </h3>
+            <span className="text-xs text-zinc-400">{activities.length} caricate</span>
+          </div>
           {loading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-16 animate-pulse rounded-lg bg-gray-100" />
+                <div key={i} className="h-14 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
               ))}
             </div>
           ) : activities.length === 0 ? (
-            <div className="py-8 text-center text-gray-500">
-              <Activity className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-              <p>Nessuna attività trovata</p>
-              <Link
-                href="/upload"
-                className="mt-2 inline-block text-sm text-blue-600 hover:underline"
-              >
-                Carica la tua prima attività
-              </Link>
+            <div className="py-8 text-center text-zinc-400">
+              <Activity className="mx-auto mb-2 h-8 w-8 opacity-30" />
+              <p className="text-sm">Nessuna attività</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {activities.map((activity) => (
+              {activities.slice(0, 5).map((activity) => (
                 <Link
                   key={activity._id}
                   href={`/activities/${activity._id}`}
-                  className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-gray-50"
+                  className="group flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 transition-all"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-lg bg-blue-50 p-2">
-                      <Activity className="h-4 w-4 text-blue-600" />
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex-shrink-0">
+                      <Zap className="h-4 w-4" />
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm text-zinc-900 dark:text-zinc-100 truncate">
                         {activity.name}
                       </p>
-                      <p className="text-sm text-gray-500">
-                        {format(new Date(activity.activityDate), "d MMM yyyy", {
-                          locale: it,
-                        })}{" "}
-                        &middot; {formatDuration(activity.duration)} &middot;{" "}
-                        {(activity.distance / 1000).toFixed(1)} km
+                      <p className="text-xs text-zinc-400 flex items-center gap-1.5 mt-0.5">
+                        <Clock className="h-3 w-3" />
+                        {formatDuration(activity.duration)} · {(activity.distance / 1000).toFixed(1)} km
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="hidden text-right sm:block">
-                      <Badge variant="secondary" className="tabular-nums">
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                    {activity.tss > 0 && (
+                      <span className="text-xs font-semibold tabular-nums text-zinc-400">
                         TSS {activity.tss}
-                      </Badge>
-                    </div>
-                    {activity.normalizedPower > 0 && (
-                      <span className="hidden text-sm font-medium tabular-nums text-gray-700 md:block">
-                        NP {activity.normalizedPower}W
                       </span>
                     )}
                     <button
                       onClick={(e) => handleDelete(e, activity._id)}
-                      className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-500"
-                      title="Elimina"
+                      className="p-1 rounded text-zinc-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors opacity-0 group-hover:opacity-100"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
-                    <ChevronRight className="h-4 w-4 text-gray-400" />
+                    <ChevronRight className="h-4 w-4 text-zinc-300 group-hover:translate-x-0.5 transition-transform" />
                   </div>
                 </Link>
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+
+        <div className="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-6">
+          <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-100 mb-1">
+            Zone di potenza
+          </h3>
+          <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-5">
+            {ftp > 0 ? `FTP: ${ftp}W` : "Configura FTP nelle impostazioni"}
+          </p>
+          {powerZones && ftp > 0 ? (
+            <div className="space-y-3">
+              {ZONE_KEYS.map((zk, i) => {
+                const zone = powerZones[zk];
+                const widthPct = Math.min(Math.round((zone.max / maxPower) * 100), 100);
+                return (
+                  <div key={zk} className="space-y-1">
+                    <div className="flex justify-between text-xs font-semibold">
+                      <span className="text-zinc-700 dark:text-zinc-300">{ZONE_NAMES[i]}</span>
+                      <span className="tabular-nums text-zinc-400">
+                        {zone.min}–{zone.max}W
+                      </span>
+                    </div>
+                    <div className="h-2 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${ZONE_COLORS[i]} rounded-full transition-all duration-500`}
+                        style={{ width: `${widthPct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
+              <p className="text-sm text-zinc-400">FTP non configurato</p>
+              <Link href="/settings" className="text-xs text-blue-600 hover:underline font-medium">
+                Vai alle impostazioni →
+              </Link>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
