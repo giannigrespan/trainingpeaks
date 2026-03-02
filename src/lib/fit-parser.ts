@@ -121,12 +121,11 @@ export function parseFitFile(buffer: Buffer): ParsedFitData {
         // Can't find definition → skip message body to avoid misalignment
         // Calculate expected message size from any record definition
         let msgSize = 0;
-        for (const [, d] of definitions) {
-          if (d.globalMesgNum === MESG_NUM_RECORD) {
+        definitions.forEach((d) => {
+          if (msgSize === 0 && d.globalMesgNum === MESG_NUM_RECORD) {
             msgSize = d.fields.reduce((sum, f) => sum + f.size, 0);
-            break;
           }
-        }
+        });
         if (msgSize > 0) {
           offset += msgSize;
         } else {
