@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Save, Zap, Heart, User } from "lucide-react";
+import { Loader2, Save, Zap, Heart, User, Link2, Link2Off, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,12 @@ interface UserProfile {
   };
 }
 
+interface WahooStatus {
+  connected: boolean;
+  connectedAt?: string;
+  lastSyncAt?: string;
+}
+
 export default function SettingsPage() {
   const { toast } = useToast();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -40,6 +46,10 @@ export default function SettingsPage() {
   const [name, setName] = useState("");
   const [ftp, setFtp] = useState(200);
   const [weight, setWeight] = useState(70);
+
+  // Wahoo state
+  const [wahooStatus, setWahooStatus] = useState<WahooStatus | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   useEffect(() => {
     fetch("/api/user/profile")
@@ -53,7 +63,27 @@ export default function SettingsPage() {
         }
       })
       .finally(() => setLoading(false));
-  }, []);
+
+    fetch("/api/integrations/wahoo/status")
+      .then((res) => res.json())
+      .then((data) => { if (data.success) setWahooStatus(data.data); });
+
+    // Handle OAuth redirect result
+    const params = new URLSearchParams(window.location.search);
+    const wahooParam = params.get("wahoo");
+    if (wahooParam === "connected") {
+      toast({ title: "Wahoo collegato", description: "Account Wahoo connesso con successo!" });
+      fetch("/api/integrations/wahoo/status")
+        .then((res) => res.json())
+        .then((data) => { if (data.success) setWahooStatus(data.data); });
+    } else if (wahooParam === "error") {
+      toast({
+        title: "Errore Wahoo",
+        description: "Impossibile collegare l'account Wahoo.",
+        variant: "destructive",
+      });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSave() {
     setSaving(true);
@@ -90,6 +120,26 @@ export default function SettingsPage() {
       });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleWahooDisconnect() {
+    setDisconnecting(true);
+    try {
+      const res = await fetch("/api/integrations/wahoo/disconnect", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setWahooStatus({ connected: false });
+        toast({ title: "Wahoo disconnesso", description: "Account Wahoo disconnesso." });
+      }
+    } catch {
+      toast({
+        title: "Errore",
+        description: "Errore durante la disconnessione.",
+        variant: "destructive",
+      });
+    } finally {
+      setDisconnecting(false);
     }
   }
 
@@ -226,6 +276,60 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Wahoo Integration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <RefreshCw className="h-5 w-5" /> Integrazione Wahoo
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 text-sm text-gray-500">
+            Collega il tuo account Wahoo per importare automaticamente gli allenamenti dopo ogni sync.
+          </p>
+          {wahooStatus?.connected ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-green-600">
+                <Link2 className="h-4 w-4" />
+                <span>Account Wahoo collegato</span>
+              </div>
+              {wahooStatus.connectedAt && (
+                <p className="text-xs text-gray-400">
+                  Collegato il: {new Date(wahooStatus.connectedAt).toLocaleDateString("it-IT")}
+                </p>
+              )}
+              {wahooStatus.lastSyncAt && (
+                <p className="text-xs text-gray-400">
+                  Ultima sincronizzazione:{" "}
+                  {new Date(wahooStatus.lastSyncAt).toLocaleString("it-IT")}
+                </p>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleWahooDisconnect}
+                disabled={disconnecting}
+                className="border-red-200 text-red-600 hover:bg-red-50"
+              >
+                {disconnecting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Link2Off className="mr-2 h-4 w-4" />
+                )}
+                Disconnetti Wahoo
+              </Button>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" asChild>
+              <a href="/api/integrations/wahoo/connect">
+                <Link2 className="mr-2 h-4 w-4" />
+                Collega Wahoo
+              </a>
+            </Button>
+          )}
+        </CardContent>
+      </Card>
 
       <Separator />
 
