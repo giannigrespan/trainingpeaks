@@ -61,6 +61,7 @@ interface MesgDef {
   globalMesgNum: number;
   numFields: number;
   fields: FieldDef[];
+  devDataSize: number; // total bytes of developer data in each data message
 }
 
 export function parseFitFile(buffer: Buffer): ParsedFitData {
@@ -159,12 +160,18 @@ export function parseFitFile(buffer: Buffer): ParsedFitData {
         offset += 3;
       }
 
-      // Handle developer fields if present
+      // Handle developer fields if present (FIT Protocol 2.x)
+      // Read their sizes so we can skip dev data bytes in data messages
+      let devDataSize = 0;
       if ((recordHeader & 0x20) !== 0) {
         if (offset < buffer.length) {
           const numDevFields = buffer[offset];
           offset++;
-          offset += numDevFields * 3;
+          for (let i = 0; i < numDevFields; i++) {
+            if (offset + 3 > buffer.length) break;
+            devDataSize += buffer[offset + 1]; // byte 1 = size of this dev field
+            offset += 3;
+          }
         }
       }
 
@@ -173,6 +180,7 @@ export function parseFitFile(buffer: Buffer): ParsedFitData {
         globalMesgNum,
         numFields,
         fields,
+        devDataSize,
       });
     } else {
       // Data message
@@ -298,6 +306,11 @@ function readDataMessage(
         }
       }
     }
+  }
+
+  // Skip developer data bytes (FIT Protocol 2.x) to keep offset aligned
+  if (def.devDataSize > 0) {
+    offset += def.devDataSize;
   }
 
   if (isRecord && hasRecord) {
