@@ -26,7 +26,17 @@ function FitBounds({ positions }: { positions: LatLngTuple[] }) {
 }
 
 export function RouteMap({ lat, lng }: RouteMapProps) {
-  const positions: LatLngTuple[] = lat.map((la, i) => [la, lng[i]]);
+  // Filter out invalid coordinates: zeros (no GPS fix), NaN, and out-of-range values
+  const positions: LatLngTuple[] = lat
+    .map((la, i) => [la, lng[i]] as LatLngTuple)
+    .filter(
+      ([la, ln]) =>
+        !isNaN(la) &&
+        !isNaN(ln) &&
+        (la !== 0 || ln !== 0) &&
+        la >= -90 && la <= 90 &&
+        ln >= -180 && ln <= 180
+    );
   if (positions.length === 0) return null;
   const center = positions[Math.floor(positions.length / 2)];
 
