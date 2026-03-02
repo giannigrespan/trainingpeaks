@@ -8,7 +8,6 @@ import {
   Upload,
   Settings,
   LogOut,
-  Activity,
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
