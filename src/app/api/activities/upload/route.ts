@@ -43,6 +43,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    console.log(`[Upload] Parsed FIT: records=${parsedData.timestamp.length}, duration=${parsedData.duration}s, distance=${parsedData.totalDistance}m, power=${parsedData.power.filter((p: number) => p > 0).length} non-zero values`);
+
     const db = await getDb();
     const userId = (session.user as { id: string }).id;
     const user = await db.collection("users").findOne({ email: session.user.email });
@@ -63,9 +65,9 @@ export async function POST(req: NextRequest) {
       distance: parsedData.totalDistance,
       elevationGain: parsedData.elevationGain,
       avgPower: Math.round(
-        powerData.reduce((s: number, v: number) => s + v, 0) / powerData.length || 0
+        powerData.reduce((s: number, v: number) => s + v, 0) / (powerData.length || 1)
       ),
-      maxPower: Math.max(...powerData, 0),
+      maxPower: powerData.reduce((max: number, v: number) => v > max ? v : max, 0),
       normalizedPower: np,
       intensityFactor,
       tss,
@@ -73,7 +75,7 @@ export async function POST(req: NextRequest) {
         parsedData.heartRate.reduce((s: number, v: number) => s + v, 0) /
           parsedData.heartRate.length || 0
       ),
-      maxHR: Math.max(...parsedData.heartRate, 0),
+      maxHR: parsedData.heartRate.reduce((max: number, v: number) => v > max ? v : max, 0),
       avgCadence: Math.round(
         parsedData.cadence.reduce((s: number, v: number) => s + v, 0) /
           parsedData.cadence.length || 0
@@ -82,7 +84,7 @@ export async function POST(req: NextRequest) {
         parsedData.totalDistance > 0 && parsedData.duration > 0
           ? parsedData.totalDistance / parsedData.duration
           : 0,
-      maxSpeed: Math.max(...parsedData.speed, 0),
+      maxSpeed: parsedData.speed.reduce((max: number, v: number) => v > max ? v : max, 0),
       calories: parsedData.calories || 0,
       powerCurve,
       createdAt: new Date(),

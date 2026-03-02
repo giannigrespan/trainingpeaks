@@ -110,10 +110,28 @@ export function parseFitFile(buffer: Buffer): ParsedFitData {
     const isCompressedTimestamp = (recordHeader & 0x80) !== 0;
 
     if (isCompressedTimestamp) {
-      // Compressed timestamp - treat as data message
-      const def = definitions.get(localMesgType & 0x03);
+      // Compressed timestamp header format: 1 LL TTTTT
+      // Bits 6-5 = local message type (NOT bits 3-0)
+      // Bits 4-0 = time offset
+      const compressedLocalType = (recordHeader >> 5) & 0x03;
+      const def = definitions.get(compressedLocalType);
       if (def) {
         offset = readDataMessage(buffer, offset, def, result);
+      } else {
+        // Can't find definition → skip message body to avoid misalignment
+        // Calculate expected message size from any record definition
+        let msgSize = 0;
+        for (const [, d] of definitions) {
+          if (d.globalMesgNum === MESG_NUM_RECORD) {
+            msgSize = d.fields.reduce((sum, f) => sum + f.size, 0);
+            break;
+          }
+        }
+        if (msgSize > 0) {
+          offset += msgSize;
+        } else {
+          break; // Can't recover
+        }
       }
       continue;
     }
@@ -167,6 +185,8 @@ export function parseFitFile(buffer: Buffer): ParsedFitData {
       offset = readDataMessage(buffer, offset, def, result);
     }
   }
+
+  console.log(`[FIT] Parsed ${result.timestamp.length} records, power: ${result.power.filter(p => p > 0).length} non-zero, duration: ${result.duration}s, distance: ${result.totalDistance}m`);
 
   // Calculate elevation gain from altitude data
   if (result.altitude.length > 1) {
