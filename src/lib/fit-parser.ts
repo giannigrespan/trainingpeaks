@@ -29,12 +29,8 @@ interface ParsedFitData {
 const FIT_EPOCH = 631065600; // seconds from Unix epoch to FIT epoch (1989-12-31)
 
 // Global Message Numbers
-const MESG_NUM_FILE_ID = 0;
 const MESG_NUM_SESSION = 18;
-const MESG_NUM_LAP = 19;
 const MESG_NUM_RECORD = 20;
-const MESG_NUM_EVENT = 21;
-const MESG_NUM_ACTIVITY = 34;
 
 // Field definitions for Record message (mesg_num = 20)
 const RECORD_FIELD_TIMESTAMP = 253;
