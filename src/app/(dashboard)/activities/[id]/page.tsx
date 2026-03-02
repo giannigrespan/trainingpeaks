@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
+import dynamic from "next/dynamic";
 import {
   ArrowLeft,
   Clock,
@@ -21,6 +22,16 @@ import {
   ActivityCharts,
   PowerCurveChart,
 } from "@/components/charts/activity-charts";
+
+const RouteMap = dynamic(
+  () => import("@/components/charts/route-map").then((m) => m.RouteMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full bg-zinc-100 dark:bg-zinc-800 animate-pulse rounded-xl" />
+    ),
+  }
+);
 
 interface ActivityDetail {
   _id: string;
@@ -50,6 +61,8 @@ interface StreamData {
   speed: number[];
   altitude: number[];
   laps?: number[];
+  lat?: number[];
+  lng?: number[];
 }
 
 export default function ActivityDetailPage() {
@@ -222,6 +235,20 @@ export default function ActivityDetailPage() {
           </CardHeader>
           <CardContent>
             <PowerCurveChart powerCurve={activity.powerCurve} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* GPS Route Map */}
+      {streams?.lat && streams.lat.length > 1 && streams.lng && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Percorso</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0 overflow-hidden rounded-b-xl">
+            <div className="h-80">
+              <RouteMap lat={streams.lat} lng={streams.lng} />
+            </div>
           </CardContent>
         </Card>
       )}
