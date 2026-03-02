@@ -10,6 +10,7 @@ import {
   Zap,
   TrendingUp,
   ChevronRight,
+  Trash2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +40,14 @@ export default function DashboardPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  async function handleDelete(e: React.MouseEvent, id: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm("Eliminare questa attività?")) return;
+    const res = await fetch(`/api/activities/${id}`, { method: "DELETE" });
+    if (res.ok) setActivities((prev) => prev.filter((a) => a._id !== id));
+  }
 
   // Weekly summary
   const now = new Date();
@@ -180,7 +189,7 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <div className="hidden text-right sm:block">
                       <Badge variant="secondary" className="tabular-nums">
                         TSS {activity.tss}
@@ -191,6 +200,13 @@ export default function DashboardPage() {
                         NP {activity.normalizedPower}W
                       </span>
                     )}
+                    <button
+                      onClick={(e) => handleDelete(e, activity._id)}
+                      className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-500"
+                      title="Elimina"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                     <ChevronRight className="h-4 w-4 text-gray-400" />
                   </div>
                 </Link>

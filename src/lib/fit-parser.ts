@@ -23,14 +23,19 @@ interface ParsedFitData {
   distance: number[];
   lat: number[];
   lng: number[];
+  laps: number[]; // Unix timestamps of each lap boundary
 }
 
 // FIT base types
 const FIT_EPOCH = 631065600; // seconds from Unix epoch to FIT epoch (1989-12-31)
 
 // Global Message Numbers
+const MESG_NUM_LAP = 19;
 const MESG_NUM_SESSION = 18;
 const MESG_NUM_RECORD = 20;
+
+// Lap fields
+const LAP_FIELD_TIMESTAMP = 253;
 
 // Field definitions for Record message (mesg_num = 20)
 const RECORD_FIELD_TIMESTAMP = 253;
@@ -80,6 +85,7 @@ export function parseFitFile(buffer: Buffer): ParsedFitData {
     distance: [],
     lat: [],
     lng: [],
+    laps: [],
   };
 
   // Validate FIT header
@@ -231,6 +237,7 @@ function readDataMessage(
 ): number {
   const isRecord = def.globalMesgNum === MESG_NUM_RECORD;
   const isSession = def.globalMesgNum === MESG_NUM_SESSION;
+  const isLap = def.globalMesgNum === MESG_NUM_LAP;
 
   let recordPower = 0;
   let recordHR = 0;
@@ -305,6 +312,11 @@ function readDataMessage(
           break;
         }
       }
+    }
+
+    if (isLap && field.fieldNum === LAP_FIELD_TIMESTAMP) {
+      const ts = (value as number) + FIT_EPOCH;
+      result.laps.push(ts);
     }
   }
 

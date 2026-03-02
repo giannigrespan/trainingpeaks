@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
@@ -13,6 +13,7 @@ import {
   Gauge,
   Mountain,
   Route,
+  Trash2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -48,13 +49,28 @@ interface StreamData {
   cadence: number[];
   speed: number[];
   altitude: number[];
+  laps?: number[];
 }
 
 export default function ActivityDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const [activity, setActivity] = useState<ActivityDetail | null>(null);
   const [streams, setStreams] = useState<StreamData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (!confirm("Eliminare questa attività? L'operazione non è reversibile.")) return;
+    setDeleting(true);
+    const res = await fetch(`/api/activities/${params.id}`, { method: "DELETE" });
+    if (res.ok) {
+      router.push("/dashboard");
+    } else {
+      setDeleting(false);
+      alert("Errore durante l'eliminazione.");
+    }
+  }
 
   useEffect(() => {
     fetch(`/api/activities/${params.id}`)
@@ -122,9 +138,19 @@ export default function ActivityDetailPage() {
               })}
             </p>
           </div>
-          <Badge variant="secondary" className="text-lg tabular-nums">
-            TSS {activity.tss}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="text-lg tabular-nums">
+              TSS {activity.tss}
+            </Badge>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="rounded-md p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+              title="Elimina attività"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -183,7 +209,7 @@ export default function ActivityDetailPage() {
             <CardTitle className="text-lg">Grafici</CardTitle>
           </CardHeader>
           <CardContent>
-            <ActivityCharts streams={streams} />
+            <ActivityCharts streams={streams} laps={streams.laps} />
           </CardContent>
         </Card>
       )}

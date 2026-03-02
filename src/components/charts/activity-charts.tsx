@@ -8,6 +8,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ReferenceLine,
   BarChart,
   Bar,
   Cell,
@@ -21,6 +22,7 @@ interface StreamData {
   cadence: number[];
   speed: number[];
   altitude: number[];
+  laps?: number[];
 }
 
 const COLORS = {
@@ -37,7 +39,10 @@ function formatTime(seconds: number) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function ActivityCharts({ streams }: { streams: StreamData }) {
+export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: number[] }) {
+  // Lap markers: elapsed seconds map directly to chart x (time = original index ≈ elapsed seconds)
+  const lapMarkers = laps ?? [];
+
   // Sample data to reduce rendering load (every 5th point)
   const step = Math.max(1, Math.floor(streams.power.length / 500));
   const chartData = [];
@@ -65,23 +70,13 @@ export function ActivityCharts({ streams }: { streams: StreamData }) {
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis
-              dataKey="time"
-              tick={{ fontSize: 11 }}
-              tickFormatter={formatTime}
-            />
+            <XAxis dataKey="time" tick={{ fontSize: 11 }} tickFormatter={formatTime} />
             <YAxis tick={{ fontSize: 11 }} unit="W" />
-            <Tooltip
-              labelFormatter={(val) => formatTime(val as number)}
-              formatter={(val) => [`${val}W`, "Potenza"]}
-            />
-            <Line
-              type="monotone"
-              dataKey="power"
-              stroke={COLORS.power}
-              strokeWidth={1.5}
-              dot={false}
-            />
+            <Tooltip labelFormatter={(val) => formatTime(val as number)} formatter={(val) => [`${val}W`, "Potenza"]} />
+            <Line type="monotone" dataKey="power" stroke={COLORS.power} strokeWidth={1.5} dot={false} />
+            {lapMarkers.map((x, i) => (
+              <ReferenceLine key={i} x={x} stroke="#94A3B8" strokeDasharray="4 2" label={{ value: `G${i + 1}`, position: "top", fontSize: 10, fill: "#94A3B8" }} />
+            ))}
           </LineChart>
         </ResponsiveContainer>
       </TabsContent>
@@ -90,23 +85,13 @@ export function ActivityCharts({ streams }: { streams: StreamData }) {
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis
-              dataKey="time"
-              tick={{ fontSize: 11 }}
-              tickFormatter={formatTime}
-            />
+            <XAxis dataKey="time" tick={{ fontSize: 11 }} tickFormatter={formatTime} />
             <YAxis tick={{ fontSize: 11 }} unit="bpm" />
-            <Tooltip
-              labelFormatter={(val) => formatTime(val as number)}
-              formatter={(val) => [`${val}bpm`, "FC"]}
-            />
-            <Line
-              type="monotone"
-              dataKey="heartRate"
-              stroke={COLORS.heartRate}
-              strokeWidth={1.5}
-              dot={false}
-            />
+            <Tooltip labelFormatter={(val) => formatTime(val as number)} formatter={(val) => [`${val}bpm`, "FC"]} />
+            <Line type="monotone" dataKey="heartRate" stroke={COLORS.heartRate} strokeWidth={1.5} dot={false} />
+            {lapMarkers.map((x, i) => (
+              <ReferenceLine key={i} x={x} stroke="#94A3B8" strokeDasharray="4 2" label={{ value: `G${i + 1}`, position: "top", fontSize: 10, fill: "#94A3B8" }} />
+            ))}
           </LineChart>
         </ResponsiveContainer>
       </TabsContent>
@@ -115,23 +100,13 @@ export function ActivityCharts({ streams }: { streams: StreamData }) {
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis
-              dataKey="time"
-              tick={{ fontSize: 11 }}
-              tickFormatter={formatTime}
-            />
+            <XAxis dataKey="time" tick={{ fontSize: 11 }} tickFormatter={formatTime} />
             <YAxis tick={{ fontSize: 11 }} unit="km/h" />
-            <Tooltip
-              labelFormatter={(val) => formatTime(val as number)}
-              formatter={(val) => [`${val}km/h`, "Velocità"]}
-            />
-            <Line
-              type="monotone"
-              dataKey="speed"
-              stroke={COLORS.speed}
-              strokeWidth={1.5}
-              dot={false}
-            />
+            <Tooltip labelFormatter={(val) => formatTime(val as number)} formatter={(val) => [`${val}km/h`, "Velocità"]} />
+            <Line type="monotone" dataKey="speed" stroke={COLORS.speed} strokeWidth={1.5} dot={false} />
+            {lapMarkers.map((x, i) => (
+              <ReferenceLine key={i} x={x} stroke="#94A3B8" strokeDasharray="4 2" label={{ value: `G${i + 1}`, position: "top", fontSize: 10, fill: "#94A3B8" }} />
+            ))}
           </LineChart>
         </ResponsiveContainer>
       </TabsContent>
@@ -140,24 +115,13 @@ export function ActivityCharts({ streams }: { streams: StreamData }) {
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis
-              dataKey="time"
-              tick={{ fontSize: 11 }}
-              tickFormatter={formatTime}
-            />
+            <XAxis dataKey="time" tick={{ fontSize: 11 }} tickFormatter={formatTime} />
             <YAxis tick={{ fontSize: 11 }} unit="m" />
-            <Tooltip
-              labelFormatter={(val) => formatTime(val as number)}
-              formatter={(val) => [`${val}m`, "Quota"]}
-            />
-            <Line
-              type="monotone"
-              dataKey="altitude"
-              stroke={COLORS.altitude}
-              strokeWidth={1.5}
-              dot={false}
-              fill="#f3f4f6"
-            />
+            <Tooltip labelFormatter={(val) => formatTime(val as number)} formatter={(val) => [`${val}m`, "Quota"]} />
+            <Line type="monotone" dataKey="altitude" stroke={COLORS.altitude} strokeWidth={1.5} dot={false} fill="#f3f4f6" />
+            {lapMarkers.map((x, i) => (
+              <ReferenceLine key={i} x={x} stroke="#94A3B8" strokeDasharray="4 2" label={{ value: `G${i + 1}`, position: "top", fontSize: 10, fill: "#94A3B8" }} />
+            ))}
           </LineChart>
         </ResponsiveContainer>
       </TabsContent>

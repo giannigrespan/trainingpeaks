@@ -94,6 +94,12 @@ export async function POST(req: NextRequest) {
       .collection("activities")
       .insertOne(activity);
 
+    // Convert lap Unix timestamps → elapsed seconds from activity start
+    const activityStartUnix = parsedData.startTime.getTime() / 1000;
+    const lapElapsed = parsedData.laps
+      .map((ts: number) => Math.round(ts - activityStartUnix))
+      .filter((s: number) => s > 0);
+
     await db.collection("activity_streams").insertOne({
       activityId: activityResult.insertedId.toString(),
       timestamp: parsedData.timestamp,
@@ -105,6 +111,7 @@ export async function POST(req: NextRequest) {
       distance: parsedData.distance,
       lat: parsedData.lat,
       lng: parsedData.lng,
+      laps: lapElapsed,
     });
 
     return NextResponse.json({
