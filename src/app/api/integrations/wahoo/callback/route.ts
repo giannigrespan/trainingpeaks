@@ -13,7 +13,8 @@ export async function GET(req: NextRequest) {
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
-  const WAHOO_APP_URL = "https://trainingpeaks.vercel.app";
+  const WAHOO_APP_URL =
+    process.env.NEXTAUTH_URL ?? "https://trainingpeaks-gianni-grespans-projects.vercel.app";
   const redirectBase = `${WAHOO_APP_URL}/settings`;
 
   if (error) {

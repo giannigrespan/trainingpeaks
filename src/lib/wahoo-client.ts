@@ -1,5 +1,6 @@
 const WAHOO_BASE_URL = "https://api.wahooligan.com";
-const WAHOO_APP_URL = "https://trainingpeaks.vercel.app";
+const WAHOO_APP_URL =
+  process.env.NEXTAUTH_URL ?? "https://trainingpeaks-gianni-grespans-projects.vercel.app";
 
 export interface WahooTokens {
   accessToken: string;
