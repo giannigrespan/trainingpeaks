@@ -56,6 +56,18 @@ export function PMCChart() {
   // Show only every N-th tick to avoid clutter
   const tickInterval = days <= 30 ? 3 : days <= 90 ? 6 : days <= 180 ? 14 : 30;
 
+  // Compute explicit axis domains so both axes stay readable
+  const leftMax = Math.max(...data.map((d) => Math.max(d.ctl, d.atl)));
+  const leftMin = Math.min(...data.map((d) => d.tsb), 0);
+  const leftPad = Math.ceil((leftMax - leftMin) * 0.1) || 5;
+  const leftDomain: [number, number] = [
+    Math.floor(leftMin - leftPad),
+    Math.ceil(leftMax + leftPad),
+  ];
+
+  const rightMax = Math.max(...data.map((d) => d.tss), 1);
+  const rightDomain: [number, number] = [0, Math.ceil(rightMax * 1.15)];
+
   return (
     <div className="space-y-3">
       {/* Legend / selector */}
@@ -104,9 +116,9 @@ export function PMCChart() {
             }}
           />
           {/* Left axis: CTL/ATL/TSB */}
-          <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+          <YAxis yAxisId="left" tick={{ fontSize: 11 }} domain={leftDomain} />
           {/* Right axis: TSS bars */}
-          <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
+          <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} domain={rightDomain} />
           <Tooltip
             labelFormatter={(val) => new Date(val as string).toLocaleDateString("it-IT")}
             formatter={(value, name) => {
