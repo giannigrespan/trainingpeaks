@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { ObjectId } from "mongodb";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/mongodb";
 import { calculateZoneDistribution } from "@/lib/cycling-metrics";
@@ -37,12 +38,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, data: { zones: [] } });
     }
 
-    // Verify activity belongs to this user
+    // Verify activity belongs to this user, then load its streams
     const activity = await db
       .collection("activities")
-      .findOne({ _id: activityId as unknown, userId } , { projection: { _id: 1 } });
+      .findOne({ _id: new ObjectId(activityId), userId }, { projection: { _id: 1 } });
 
-    // Load streams (activityId stored as string)
+    if (!activity) {
+      return NextResponse.json({ success: true, data: { zones: [] } });
+    }
+
     const streams = await db
       .collection("activity_streams")
       .findOne({ activityId });
@@ -50,8 +54,6 @@ export async function GET(req: NextRequest) {
     if (!streams?.power || (streams.power as number[]).length === 0) {
       return NextResponse.json({ success: true, data: { zones: [] } });
     }
-
-    void activity; // userId check done via activity lookup; if null streams still fine to show
 
     const zones = calculateZoneDistribution(streams.power as number[], ftp);
 
