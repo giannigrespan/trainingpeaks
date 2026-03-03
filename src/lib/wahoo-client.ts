@@ -75,6 +75,20 @@ export async function refreshAccessToken(refreshToken: string): Promise<WahooTok
   };
 }
 
+async function wahooFetch(url: string, options?: RequestInit): Promise<Response> {
+  const delays = [2000, 4000, 8000];
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    const res = await fetch(url, options);
+    if (res.status !== 429) return res;
+    if (attempt === delays.length) return res; // give up, return 429 to caller
+    const retryAfter = res.headers.get("Retry-After");
+    const wait = retryAfter ? parseInt(retryAfter, 10) * 1000 : delays[attempt];
+    await new Promise((r) => setTimeout(r, wait));
+  }
+  // unreachable
+  return fetch(url, options);
+}
+
 export async function getWahooUserId(accessToken: string): Promise<string> {
   const res = await fetch(`${WAHOO_BASE_URL}/v1/user`, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -88,7 +102,7 @@ export async function getWorkout(
   accessToken: string,
   workoutId: string
 ): Promise<WahooWorkout> {
-  const res = await fetch(`${WAHOO_BASE_URL}/v1/workouts/${workoutId}`, {
+  const res = await wahooFetch(`${WAHOO_BASE_URL}/v1/workouts/${workoutId}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) throw new Error(`Failed to get workout: ${res.status}`);
@@ -104,7 +118,7 @@ export async function getWorkouts(
     page: String(page),
     per_page: String(perPage),
   });
-  const res = await fetch(`${WAHOO_BASE_URL}/v1/workouts?${params}`, {
+  const res = await wahooFetch(`${WAHOO_BASE_URL}/v1/workouts?${params}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) throw new Error(`Failed to list workouts: ${res.status}`);
