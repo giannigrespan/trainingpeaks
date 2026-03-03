@@ -22,7 +22,7 @@ interface PMCData {
   tss: number;
 }
 
-const DAYS_OPTIONS = [90, 180, 365];
+const DAYS_OPTIONS = [30, 90, 180, 365];
 
 export function PMCChart() {
   const [data, setData] = useState<PMCData[]>([]);
@@ -54,7 +54,7 @@ export function PMCChart() {
   }
 
   // Show only every N-th tick to avoid clutter
-  const tickInterval = days <= 90 ? 6 : days <= 180 ? 14 : 30;
+  const tickInterval = days <= 30 ? 3 : days <= 90 ? 6 : days <= 180 ? 14 : 30;
 
   return (
     <div className="space-y-3">
@@ -129,8 +129,8 @@ export function PMCChart() {
             yAxisId="right"
             dataKey="tss"
             name="tss"
-            fill="#E2E8F0"
-            opacity={0.8}
+            fill="#94A3B8"
+            opacity={0.6}
             radius={[2, 2, 0, 0]}
           />
 

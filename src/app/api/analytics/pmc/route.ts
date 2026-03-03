@@ -20,13 +20,18 @@ export async function GET(req: NextRequest) {
     const userId = (session.user as { id: string }).id;
 
     const db = await getDb();
-    const startDate = subDays(new Date(), days);
+
+    // Fetch extra warm-up data so CTL/ATL converge before the display window.
+    // CTL has a 42-day time constant → use 3× that (126 days) as warm-up.
+    const WARMUP_DAYS = 126;
+    const fetchStart = subDays(new Date(), days + WARMUP_DAYS);
+    const displayStart = subDays(new Date(), days);
 
     const activities = await db
       .collection("activities")
       .find({
         userId,
-        activityDate: { $gte: startDate },
+        activityDate: { $gte: fetchStart },
       })
       .sort({ activityDate: 1 })
       .toArray();
@@ -38,14 +43,17 @@ export async function GET(req: NextRequest) {
       tssMap.set(dateKey, (tssMap.get(dateKey) || 0) + (a.tss || 0));
     }
 
-    // Fill all days in range
-    const allDays = eachDayOfInterval({ start: startDate, end: new Date() });
+    // Fill all days (warm-up + display window)
+    const allDays = eachDayOfInterval({ start: fetchStart, end: new Date() });
     const dailyTSS = allDays.map((d) => ({
       date: format(d, "yyyy-MM-dd"),
       tss: tssMap.get(format(d, "yyyy-MM-dd")) || 0,
     }));
 
-    const pmc = calculatePMC(dailyTSS);
+    // Calculate PMC over the full range, then slice to the display window only
+    const fullPmc = calculatePMC(dailyTSS);
+    const displayStartStr = format(displayStart, "yyyy-MM-dd");
+    const pmc = fullPmc.filter((p) => p.date >= displayStartStr);
 
     return NextResponse.json({
       success: true,
