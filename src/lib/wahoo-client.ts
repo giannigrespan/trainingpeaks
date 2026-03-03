@@ -108,7 +108,10 @@ export async function registerWebhook(
       event_types: ["workout_summary"],
     }),
   });
-  if (!res.ok) throw new Error(`Webhook registration failed: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "(unreadable)");
+    throw new Error(`Webhook registration failed: ${res.status} – ${body}`);
+  }
   const data = await res.json();
   // Wahoo returns "webhook_token" in the response
   return { id: String(data.id), secret: data.webhook_token ?? data.webhook_secret };
