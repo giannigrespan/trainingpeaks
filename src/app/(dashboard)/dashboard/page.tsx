@@ -462,9 +462,10 @@ export default function DashboardPage() {
                   v != null ? `${v}W` : "—",
                   name === "allTime" ? "Best ever" : "Ultimi 90gg",
                 ]}
-                labelFormatter={(d: number) =>
-                  d < 60 ? `${d} sec` : d < 3600 ? `${d / 60} min` : `${d / 3600}h`
-                }
+                labelFormatter={(d) => {
+                  const n = Number(d);
+                  return n < 60 ? `${n} sec` : n < 3600 ? `${n / 60} min` : `${n / 3600}h`;
+                }}
                 contentStyle={{ fontSize: 12 }}
               />
               <Legend
