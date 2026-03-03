@@ -51,7 +51,18 @@ export async function POST(req: NextRequest) {
   let page = 1;
 
   while (true) {
-    const result = await getWorkouts(accessToken, page);
+    let result;
+    try {
+      result = await getWorkouts(accessToken, page);
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("429")) {
+        return NextResponse.json(
+          { error: "Wahoo ha limitato le richieste. Riprova tra qualche minuto." },
+          { status: 429 }
+        );
+      }
+      throw err;
+    }
     const workouts = result.workouts ?? [];
     if (workouts.length === 0) break;
 
