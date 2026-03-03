@@ -11,6 +11,9 @@ import {
 } from "@/lib/wahoo-client";
 import { importFitBuffer } from "@/lib/activity-importer";
 
+// Max new workouts to import per sync call to avoid serverless timeout
+const MAX_NEW_PER_SYNC = 5;
+
 export async function POST(req: NextRequest) {
   void req;
   const session = await getServerSession(authOptions);
@@ -48,9 +51,10 @@ export async function POST(req: NextRequest) {
   let imported = 0;
   let skipped = 0;
   let errors = 0;
+  let hasMore = false;
   let page = 1;
 
-  while (true) {
+  outer: while (true) {
     let result;
     try {
       result = await getWorkouts(accessToken, page);
@@ -67,8 +71,13 @@ export async function POST(req: NextRequest) {
     if (workouts.length === 0) break;
 
     for (const workout of workouts) {
+      // Stop if we've imported enough for this call
+      if (imported >= MAX_NEW_PER_SYNC) {
+        hasMore = true;
+        break outer;
+      }
+
       const wahooWorkoutId = String(workout.id);
-      await new Promise((r) => setTimeout(r, 300));
 
       const existing = await db
         .collection("activities")
@@ -130,7 +139,7 @@ export async function POST(req: NextRequest) {
   );
 
   console.log(
-    `[Wahoo sync] userId=${userId} imported=${imported} skipped=${skipped} errors=${errors} pages=${page}`
+    `[Wahoo sync] userId=${userId} imported=${imported} skipped=${skipped} errors=${errors} hasMore=${hasMore}`
   );
-  return NextResponse.json({ imported, skipped, errors });
+  return NextResponse.json({ imported, skipped, errors, hasMore });
 }
