@@ -63,18 +63,61 @@ interface PowerZones {
 
 // ─── MetricCard ───────────────────────────────────────────────────────────────
 
+function getTSBLabel(tsb: number): { text: string; color: string } {
+  if (tsb > 25)  return { text: "Transizione",    color: "text-gray-400" };
+  if (tsb > 10)  return { text: "Fresco",         color: "text-emerald-500" };
+  if (tsb >= -10) return { text: "Forma ottimale", color: "text-blue-500" };
+  if (tsb >= -30) return { text: "Affaticato",    color: "text-amber-500" };
+  return                  { text: "Sovraccarico",  color: "text-red-500" };
+}
+
+interface TSBStatus {
+  emoji: string;
+  label: string;
+  advice: string;
+  bg: string;
+  border: string;
+  text: string;
+}
+
+function getPMCStatus(tsb: number): TSBStatus {
+  if (tsb > 25)  return { emoji: "⬜", label: "Transizione",    advice: "Riprendi gli allenamenti gradualmente.",       bg: "bg-zinc-50 dark:bg-zinc-800",        border: "border-zinc-200 dark:border-zinc-700",    text: "text-zinc-600 dark:text-zinc-400" };
+  if (tsb > 10)  return { emoji: "🟢", label: "Fresco",         advice: "Ottimo momento per una gara o un test FTP.",   bg: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800", text: "text-emerald-700 dark:text-emerald-400" };
+  if (tsb >= -10) return { emoji: "🔵", label: "Forma ottimale", advice: "Equilibrio perfetto — continua con il piano.", bg: "bg-blue-50 dark:bg-blue-900/20",     border: "border-blue-200 dark:border-blue-800",    text: "text-blue-700 dark:text-blue-400" };
+  if (tsb >= -30) return { emoji: "🟡", label: "Affaticato",    advice: "Pianifica un recupero nei prossimi giorni.",   bg: "bg-amber-50 dark:bg-amber-900/20",   border: "border-amber-200 dark:border-amber-800",  text: "text-amber-700 dark:text-amber-400" };
+  return          { emoji: "🔴", label: "Sovraccarico",          advice: "Inserisci una settimana di scarico subito.",   bg: "bg-red-50 dark:bg-red-900/20",       border: "border-red-200 dark:border-red-800",      text: "text-red-700 dark:text-red-400" };
+}
+
+function PMCStatusBar({ ctl, atl, tsb }: { ctl: number; atl: number; tsb: number }) {
+  const s = getPMCStatus(tsb);
+  return (
+    <div className={`mt-4 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${s.bg} ${s.border}`}>
+      <p className={`text-sm font-medium ${s.text}`}>
+        {s.emoji} <strong>{s.label}</strong> — {s.advice}
+      </p>
+      <p className="shrink-0 text-xs text-zinc-400 dark:text-zinc-500 tabular-nums">
+        CTL {ctl.toFixed(1)} · ATL {atl.toFixed(1)}
+      </p>
+    </div>
+  );
+}
+
 function MetricCard({
   title,
   value,
   delta,
   deltaLabel,
   color,
+  sub,
+  subColor,
 }: {
   title: string;
   value: string;
   delta?: number;
   deltaLabel?: string;
   color: "blue" | "orange" | "emerald" | "rose";
+  sub?: string;
+  subColor?: string;
 }) {
   const accentColor = {
     blue: "text-blue-500",
@@ -103,6 +146,11 @@ function MetricCard({
       <div className="text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100">
         {value}
       </div>
+      {sub && (
+        <div className={`text-xs mt-0.5 font-medium ${subColor ?? "text-zinc-400"}`}>
+          {sub}
+        </div>
+      )}
       {delta !== undefined && (
         <div className={`flex items-center gap-1 text-xs mt-1 font-medium ${deltaColor}`}>
           <DeltaIcon className="h-3 w-3" />
@@ -239,6 +287,8 @@ export default function DashboardPage() {
               delta={lastPmc && prevPmc ? +(lastPmc.tsb - prevPmc.tsb).toFixed(1) : undefined}
               deltaLabel="vs ieri"
               color={lastPmc && lastPmc.tsb >= 0 ? "emerald" : "rose"}
+              sub={lastPmc ? getTSBLabel(lastPmc.tsb).text : undefined}
+              subColor={lastPmc ? getTSBLabel(lastPmc.tsb).color : undefined}
             />
             <MetricCard
               title="IF Medio"
@@ -259,6 +309,7 @@ export default function DashboardPage() {
             </p>
           </div>
           <PMCChart />
+          {lastPmc && <PMCStatusBar ctl={lastPmc.ctl} atl={lastPmc.atl} tsb={lastPmc.tsb} />}
         </div>
 
         <div className="lg:col-span-1 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-6 flex flex-col">

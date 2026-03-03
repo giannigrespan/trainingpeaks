@@ -53,7 +53,9 @@ export async function GET(req: NextRequest) {
     // Calculate PMC over the full range, then slice to the display window only
     const fullPmc = calculatePMC(dailyTSS);
     const displayStartStr = format(displayStart, "yyyy-MM-dd");
-    const pmc = fullPmc.filter((p) => p.date >= displayStartStr);
+    const pmc = fullPmc
+      .filter((p) => p.date >= displayStartStr)
+      .map((p) => ({ ...p, hasTSS: p.tss > 0 }));
 
     return NextResponse.json({
       success: true,
