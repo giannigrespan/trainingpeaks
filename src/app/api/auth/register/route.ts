@@ -41,6 +41,8 @@ export async function POST(req: NextRequest) {
         z4: { min: 160, max: 175 },
         z5: { min: 175, max: 200 },
       },
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      subscriptionStatus: "trialing",
       createdAt: new Date(),
       updatedAt: new Date(),
     });
