@@ -20,7 +20,7 @@ export function getAuthorizationUrl(state: string): string {
     client_id: process.env.WAHOO_CLIENT_ID!,
     redirect_uri: `${WAHOO_APP_URL}/api/integrations/wahoo/callback`,
     response_type: "code",
-    scope: "user_read workouts_read",
+    scope: "user_read workouts_read offline_data",
     state,
   });
   return `${WAHOO_BASE_URL}/oauth/authorize?${params.toString()}`;
@@ -93,39 +93,3 @@ export async function downloadFitFile(url: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
-export async function registerWebhook(
-  accessToken: string,
-  webhookUrl: string
-): Promise<{ id: string; secret?: string }> {
-  const res = await fetch(`${WAHOO_BASE_URL}/v1/user/webhooks`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      webhook_url: webhookUrl,
-      event_types: ["workout_summary"],
-    }),
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "(unreadable)");
-    throw new Error(`Webhook registration failed: ${res.status} – ${body}`);
-  }
-  const data = await res.json();
-  // Wahoo returns "webhook_token" in the response
-  return { id: String(data.id), secret: data.webhook_token ?? data.webhook_secret };
-}
-
-export async function deleteWebhook(
-  accessToken: string,
-  webhookId: string
-): Promise<void> {
-  const res = await fetch(`${WAHOO_BASE_URL}/v1/user/webhooks/${webhookId}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!res.ok && res.status !== 404) {
-    throw new Error(`Webhook deletion failed: ${res.status}`);
-  }
-}

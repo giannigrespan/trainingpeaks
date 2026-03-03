@@ -4,7 +4,6 @@ import { getDb } from "@/lib/mongodb";
 import {
   exchangeCodeForTokens,
   getWahooUserId,
-  registerWebhook,
 } from "@/lib/wahoo-client";
 
 export async function GET(req: NextRequest) {
@@ -40,17 +39,6 @@ export async function GET(req: NextRequest) {
     const tokens = await exchangeCodeForTokens(code);
     const wahooUserId = await getWahooUserId(tokens.accessToken);
 
-    const webhookUrl = `${WAHOO_APP_URL}/api/integrations/wahoo/webhook`;
-    let webhookId: string | null = null;
-    let webhookSecret: string | null = null;
-    try {
-      const webhook = await registerWebhook(tokens.accessToken, webhookUrl);
-      webhookId = webhook.id;
-      webhookSecret = webhook.secret ?? null;
-    } catch (err) {
-      console.warn("[Wahoo] Webhook registration failed (non-fatal):", err);
-    }
-
     const db = await getDb();
     await db.collection("users").updateOne(
       { _id: new ObjectId(stateData.userId) },
@@ -62,8 +50,6 @@ export async function GET(req: NextRequest) {
             refreshToken: tokens.refreshToken,
             expiresAt: tokens.expiresAt,
             wahooUserId,
-            webhookId,
-            webhookSecret,
             connectedAt: new Date(),
             lastSyncAt: null,
           },
