@@ -65,11 +65,34 @@ interface StreamData {
   lng?: number[];
 }
 
+interface ZoneData {
+  zone: string;
+  percentage: number;
+  seconds: number;
+}
+
+const ZONE_COLORS = [
+  "bg-zinc-400",
+  "bg-blue-400",
+  "bg-emerald-400",
+  "bg-orange-400",
+  "bg-rose-500",
+];
+
+function getIFCategory(if_: number): { label: string; color: string } {
+  if (if_ < 0.60) return { label: "Recovery",   color: "bg-zinc-100 text-zinc-600" };
+  if (if_ < 0.75) return { label: "Endurance",  color: "bg-blue-100 text-blue-700" };
+  if (if_ < 0.90) return { label: "Tempo",      color: "bg-green-100 text-green-700" };
+  if (if_ < 1.00) return { label: "Threshold",  color: "bg-orange-100 text-orange-700" };
+  return           { label: "VO2max+",           color: "bg-red-100 text-red-700" };
+}
+
 export default function ActivityDetailPage() {
   const params = useParams();
   const router = useRouter();
   const [activity, setActivity] = useState<ActivityDetail | null>(null);
   const [streams, setStreams] = useState<StreamData | null>(null);
+  const [zones, setZones] = useState<ZoneData[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
 
@@ -86,12 +109,17 @@ export default function ActivityDetailPage() {
   }
 
   useEffect(() => {
-    fetch(`/api/activities/${params.id}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setActivity(data.data.activity);
-          setStreams(data.data.streams);
+    Promise.all([
+      fetch(`/api/activities/${params.id}`).then((r) => r.json()),
+      fetch(`/api/analytics/zones?activityId=${params.id}`).then((r) => r.json()),
+    ])
+      .then(([actData, zonesData]) => {
+        if (actData.success) {
+          setActivity(actData.data.activity);
+          setStreams(actData.data.streams);
+        }
+        if (zonesData.success) {
+          setZones(zonesData.data.zones ?? []);
         }
       })
       .finally(() => setLoading(false));
@@ -200,6 +228,7 @@ export default function ActivityDetailPage() {
           label="NP"
           value={`${activity.normalizedPower} W`}
           sub={`IF ${activity.intensityFactor}`}
+          ifCategory={activity.intensityFactor ? getIFCategory(activity.intensityFactor) : undefined}
         />
         <MetricCard
           icon={<Heart className="h-4 w-4 text-red-600" />}
@@ -223,6 +252,31 @@ export default function ActivityDetailPage() {
           </CardHeader>
           <CardContent>
             <ActivityCharts streams={streams} laps={streams.laps} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Zone Distribution */}
+      {zones.length > 0 && activity.avgPower > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Zone di Potenza</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {zones.map((z, i) => (
+              <div key={z.zone} className="flex items-center gap-3">
+                <span className="w-32 shrink-0 text-xs text-gray-500">{z.zone}</span>
+                <div className="flex-1 h-4 rounded-full bg-zinc-100 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${ZONE_COLORS[i] ?? "bg-zinc-400"}`}
+                    style={{ width: `${z.percentage}%` }}
+                  />
+                </div>
+                <span className="w-9 text-right text-xs font-medium tabular-nums text-gray-700">
+                  {z.percentage}%
+                </span>
+              </div>
+            ))}
           </CardContent>
         </Card>
       )}
@@ -261,11 +315,13 @@ function MetricCard({
   label,
   value,
   sub,
+  ifCategory,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   sub?: string;
+  ifCategory?: { label: string; color: string };
 }) {
   return (
     <Card>
@@ -277,7 +333,16 @@ function MetricCard({
         <p className="mt-1 text-xl font-bold tabular-nums text-gray-900">
           {value}
         </p>
-        {sub && <p className="text-xs text-gray-400 tabular-nums">{sub}</p>}
+        {sub && (
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className="text-xs text-gray-400 tabular-nums">{sub}</p>
+            {ifCategory && (
+              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ifCategory.color}`}>
+                {ifCategory.label}
+              </span>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

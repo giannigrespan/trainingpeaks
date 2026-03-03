@@ -63,18 +63,30 @@ interface PowerZones {
 
 // ─── MetricCard ───────────────────────────────────────────────────────────────
 
+function getTSBLabel(tsb: number): { text: string; color: string } {
+  if (tsb > 25)  return { text: "Transizione",    color: "text-gray-400" };
+  if (tsb > 10)  return { text: "Fresco",         color: "text-emerald-500" };
+  if (tsb >= -10) return { text: "Forma ottimale", color: "text-blue-500" };
+  if (tsb >= -30) return { text: "Affaticato",    color: "text-amber-500" };
+  return                  { text: "Sovraccarico",  color: "text-red-500" };
+}
+
 function MetricCard({
   title,
   value,
   delta,
   deltaLabel,
   color,
+  sub,
+  subColor,
 }: {
   title: string;
   value: string;
   delta?: number;
   deltaLabel?: string;
   color: "blue" | "orange" | "emerald" | "rose";
+  sub?: string;
+  subColor?: string;
 }) {
   const accentColor = {
     blue: "text-blue-500",
@@ -103,6 +115,11 @@ function MetricCard({
       <div className="text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100">
         {value}
       </div>
+      {sub && (
+        <div className={`text-xs mt-0.5 font-medium ${subColor ?? "text-zinc-400"}`}>
+          {sub}
+        </div>
+      )}
       {delta !== undefined && (
         <div className={`flex items-center gap-1 text-xs mt-1 font-medium ${deltaColor}`}>
           <DeltaIcon className="h-3 w-3" />
@@ -239,6 +256,8 @@ export default function DashboardPage() {
               delta={lastPmc && prevPmc ? +(lastPmc.tsb - prevPmc.tsb).toFixed(1) : undefined}
               deltaLabel="vs ieri"
               color={lastPmc && lastPmc.tsb >= 0 ? "emerald" : "rose"}
+              sub={lastPmc ? getTSBLabel(lastPmc.tsb).text : undefined}
+              subColor={lastPmc ? getTSBLabel(lastPmc.tsb).color : undefined}
             />
             <MetricCard
               title="IF Medio"
