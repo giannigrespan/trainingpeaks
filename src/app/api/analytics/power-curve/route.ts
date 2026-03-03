@@ -32,32 +32,22 @@ export async function GET() {
 
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
-  const [allActivities, recentActivities] = await Promise.all([
-    db
-      .collection("activities")
-      .find({ userId, "powerCurve.0": { $exists: true } })
-      .project({ powerCurve: 1 })
-      .toArray(),
-    db
-      .collection("activities")
-      .find({ userId, activityDate: { $gte: ninetyDaysAgo }, "powerCurve.0": { $exists: true } })
-      .project({ powerCurve: 1 })
-      .toArray(),
-  ]);
+  const recentActivities = await db
+    .collection("activities")
+    .find({ userId, activityDate: { $gte: ninetyDaysAgo }, "powerCurve.0": { $exists: true } })
+    .project({ powerCurve: 1 })
+    .toArray();
 
   type ActivityWithCurve = { powerCurve: { duration: number; power: number }[] };
 
-  const toTyped = (arr: typeof allActivities): ActivityWithCurve[] =>
-    arr.map((a) => ({ powerCurve: a.powerCurve ?? [] }));
-
-  const allTyped = toTyped(allActivities);
-  const recentTyped = toTyped(recentActivities);
+  const recentTyped: ActivityWithCurve[] = recentActivities.map((a) => ({
+    powerCurve: a.powerCurve ?? [],
+  }));
 
   const points = DURATIONS.map((d) => ({
     duration: d,
-    allTime: bestPowerAt(allTyped, d),
     recent: bestPowerAt(recentTyped, d),
-  })).filter((p) => p.allTime > 0);
+  })).filter((p) => p.recent > 0);
 
   return NextResponse.json({ success: true, data: points });
 }

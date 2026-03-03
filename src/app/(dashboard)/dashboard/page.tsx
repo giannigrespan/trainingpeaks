@@ -23,7 +23,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from "recharts";
 
@@ -43,7 +42,6 @@ interface ActivitySummary {
 
 interface PowerCurvePoint {
   duration: number;
-  allTime: number;
   recent: number;
 }
 
@@ -435,7 +433,7 @@ export default function DashboardPage() {
               Curva di Potenza
             </h3>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Best ever vs ultimi 90 giorni
+              Ultimi 90 giorni
             </p>
           </div>
           <ResponsiveContainer width="100%" height={220}>
@@ -458,27 +456,12 @@ export default function DashboardPage() {
                 className="text-zinc-400"
               />
               <Tooltip
-                formatter={(v: number | undefined, name: string | undefined) => [
-                  v != null ? `${v}W` : "—",
-                  name === "allTime" ? "Best ever" : "Ultimi 90gg",
-                ]}
+                formatter={(v: number | undefined) => [v != null ? `${v}W` : "—", "Potenza"]}
                 labelFormatter={(d) => {
                   const n = Number(d);
                   return n < 60 ? `${n} sec` : n < 3600 ? `${n / 60} min` : `${n / 3600}h`;
                 }}
                 contentStyle={{ fontSize: 12 }}
-              />
-              <Legend
-                formatter={(v) => (v === "allTime" ? "Best ever" : "Ultimi 90 giorni")}
-                wrapperStyle={{ fontSize: 12 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="allTime"
-                stroke="#a1a1aa"
-                strokeDasharray="4 2"
-                dot={false}
-                strokeWidth={2}
               />
               <Line
                 type="monotone"
