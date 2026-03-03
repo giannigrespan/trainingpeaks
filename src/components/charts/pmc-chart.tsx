@@ -183,13 +183,16 @@ export function PMCChart() {
             name="tss"
             stroke="transparent"
             strokeWidth={0}
-            dot={(props: { cx: number; cy: number; payload: PMCData }) => {
-              if (!props.payload.hasTSS) return <g key={`tss-empty-${props.payload.date}`} />;
+            dot={(props: { cx?: number; cy?: number; payload?: PMCData }) => {
+              const { cx, cy, payload } = props;
+              if (!payload?.hasTSS || cx == null || cy == null) {
+                return <g key={`tss-empty-${payload?.date ?? Math.random()}`} />;
+              }
               return (
                 <circle
-                  key={`tss-dot-${props.payload.date}`}
-                  cx={props.cx}
-                  cy={props.cy}
+                  key={`tss-dot-${payload.date}`}
+                  cx={cx}
+                  cy={cy}
                   r={3}
                   fill="#EF4444"
                   stroke="white"
