@@ -150,9 +150,12 @@ export default function SettingsPage() {
       const res = await fetch("/api/integrations/wahoo/sync", { method: "POST" });
       const data = await res.json();
       if (res.ok) {
+        const description = data.hasMore
+          ? `Importati: ${data.imported}${data.errors ? `, errori: ${data.errors}` : ""}. Ci sono altri workout da importare, clicca di nuovo.`
+          : `Importati: ${data.imported}, già presenti: ${data.skipped}${data.errors ? `, errori: ${data.errors}` : ""}`;
         toast({
-          title: "Sincronizzazione completata",
-          description: `Importati: ${data.imported}, già presenti: ${data.skipped}${data.errors ? `, errori: ${data.errors}` : ""}`,
+          title: data.hasMore ? "Importazione parziale" : "Sincronizzazione completata",
+          description,
         });
         fetch("/api/integrations/wahoo/status")
           .then((r) => r.json())
