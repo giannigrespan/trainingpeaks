@@ -15,6 +15,14 @@ export interface WahooWorkout {
   file?: { url: string };
 }
 
+export interface WahooWorkoutsPage {
+  workouts: WahooWorkout[];
+  total: number;
+  page: number;
+  per_page: number;
+  page_count: number;
+}
+
 export function getAuthorizationUrl(state: string): string {
   const params = new URLSearchParams({
     client_id: process.env.WAHOO_CLIENT_ID!,
@@ -84,6 +92,22 @@ export async function getWorkout(
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) throw new Error(`Failed to get workout: ${res.status}`);
+  return res.json();
+}
+
+export async function getWorkouts(
+  accessToken: string,
+  page: number,
+  perPage = 30
+): Promise<WahooWorkoutsPage> {
+  const params = new URLSearchParams({
+    page: String(page),
+    per_page: String(perPage),
+  });
+  const res = await fetch(`${WAHOO_BASE_URL}/v1/workouts?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) throw new Error(`Failed to list workouts: ${res.status}`);
   return res.json();
 }
 

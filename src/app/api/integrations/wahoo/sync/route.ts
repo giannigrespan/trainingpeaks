@@ -1,0 +1,117 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { ObjectId } from "mongodb";
+import { authOptions } from "@/lib/auth";
+import { getDb } from "@/lib/mongodb";
+import {
+  refreshAccessToken,
+  getWorkouts,
+  getWorkout,
+  downloadFitFile,
+} from "@/lib/wahoo-client";
+import { importFitBuffer } from "@/lib/activity-importer";
+
+export async function POST(req: NextRequest) {
+  void req;
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userId = (session.user as { id: string }).id;
+  const db = await getDb();
+  const user = await db
+    .collection("users")
+    .findOne({ _id: new ObjectId(userId) });
+
+  if (!user?.wahoo?.connected) {
+    return NextResponse.json({ error: "Wahoo not connected" }, { status: 400 });
+  }
+
+  // Refresh token if expired
+  let accessToken: string = user.wahoo.accessToken;
+  if (Date.now() / 1000 > user.wahoo.expiresAt - 60) {
+    const newTokens = await refreshAccessToken(user.wahoo.refreshToken);
+    accessToken = newTokens.accessToken;
+    await db.collection("users").updateOne(
+      { _id: new ObjectId(userId) },
+      {
+        $set: {
+          "wahoo.accessToken": newTokens.accessToken,
+          "wahoo.refreshToken": newTokens.refreshToken,
+          "wahoo.expiresAt": newTokens.expiresAt,
+        },
+      }
+    );
+  }
+
+  let imported = 0;
+  let skipped = 0;
+  let errors = 0;
+  let page = 1;
+
+  while (true) {
+    const result = await getWorkouts(accessToken, page);
+    const workouts = result.workouts ?? [];
+    if (workouts.length === 0) break;
+
+    for (const workout of workouts) {
+      const wahooWorkoutId = String(workout.id);
+
+      const existing = await db
+        .collection("activities")
+        .findOne({ wahooWorkoutId });
+      if (existing) {
+        skipped++;
+        continue;
+      }
+
+      let fitUrl: string | null = workout.file?.url ?? null;
+      if (!fitUrl) {
+        try {
+          const detail = await getWorkout(accessToken, wahooWorkoutId);
+          fitUrl = detail.file?.url ?? null;
+        } catch {
+          errors++;
+          continue;
+        }
+      }
+
+      if (!fitUrl) {
+        skipped++;
+        continue;
+      }
+
+      try {
+        const buffer = await downloadFitFile(fitUrl);
+        await importFitBuffer(buffer, {
+          userId,
+          name:
+            workout.name ||
+            `Wahoo ${new Date(workout.starts).toLocaleDateString("it-IT")}`,
+          wahooWorkoutId,
+        });
+        imported++;
+      } catch (err) {
+        console.error(
+          `[Wahoo sync] Failed to import workout ${wahooWorkoutId}:`,
+          err
+        );
+        errors++;
+      }
+    }
+
+    if (page >= result.page_count) break;
+    page++;
+  }
+
+  await db.collection("users").updateOne(
+    { _id: new ObjectId(userId) },
+    { $set: { "wahoo.lastSyncAt": new Date() } }
+  );
+
+  console.log(
+    `[Wahoo sync] userId=${userId} imported=${imported} skipped=${skipped} errors=${errors}`
+  );
+  return NextResponse.json({ imported, skipped, errors });
+}
