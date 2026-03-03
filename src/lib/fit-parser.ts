@@ -263,7 +263,10 @@ function readDataMessage(
       hasRecord = true;
       switch (field.fieldNum) {
         case RECORD_FIELD_TIMESTAMP:
-          recordTimestamp = (value as number) + FIT_EPOCH;
+          // 0xFFFFFFFF is the FIT "invalid" sentinel — skip it
+          if ((value as number) !== 0xffffffff) {
+            recordTimestamp = (value as number) + FIT_EPOCH;
+          }
           break;
         case RECORD_FIELD_POWER:
           recordPower = value as number;
@@ -295,7 +298,11 @@ function readDataMessage(
     if (isSession) {
       switch (field.fieldNum) {
         case SESSION_FIELD_TOTAL_ELAPSED_TIME:
-          result.duration = Math.round((value as number) / 1000); // ms to s
+          // FIT scale=1000: raw value is in 1/1000 s → divide by 1000 to get seconds.
+          // 0xFFFFFFFF is the "invalid" sentinel in FIT protocol — ignore it.
+          if ((value as number) !== 0xffffffff) {
+            result.duration = Math.round((value as number) / 1000);
+          }
           break;
         case SESSION_FIELD_TOTAL_DISTANCE:
           result.totalDistance = Math.round((value as number) / 100); // cm to m
