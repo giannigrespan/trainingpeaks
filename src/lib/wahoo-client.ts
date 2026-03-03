@@ -13,6 +13,7 @@ export interface WahooWorkout {
   starts: string;
   minutes: number;
   file?: { url: string };
+  workout_summary?: { file?: { url: string } };
 }
 
 export interface WahooWorkoutsPage {
