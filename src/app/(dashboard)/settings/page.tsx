@@ -50,6 +50,7 @@ export default function SettingsPage() {
   // Wahoo state
   const [wahooStatus, setWahooStatus] = useState<WahooStatus | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     fetch("/api/user/profile")
@@ -140,6 +141,37 @@ export default function SettingsPage() {
       });
     } finally {
       setDisconnecting(false);
+    }
+  }
+
+  async function handleWahooSync() {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/integrations/wahoo/sync", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        toast({
+          title: "Sincronizzazione completata",
+          description: `Importati: ${data.imported}, già presenti: ${data.skipped}${data.errors ? `, errori: ${data.errors}` : ""}`,
+        });
+        fetch("/api/integrations/wahoo/status")
+          .then((r) => r.json())
+          .then((d) => { if (d.success) setWahooStatus(d.data); });
+      } else {
+        toast({
+          title: "Errore sincronizzazione",
+          description: data.error || "Errore durante l'importazione.",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({
+        title: "Errore",
+        description: "Errore di connessione.",
+        variant: "destructive",
+      });
+    } finally {
+      setSyncing(false);
     }
   }
 
@@ -305,20 +337,35 @@ export default function SettingsPage() {
                   {new Date(wahooStatus.lastSyncAt).toLocaleString("it-IT")}
                 </p>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleWahooDisconnect}
-                disabled={disconnecting}
-                className="border-red-200 text-red-600 hover:bg-red-50"
-              >
-                {disconnecting ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Link2Off className="mr-2 h-4 w-4" />
-                )}
-                Disconnetti Wahoo
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleWahooSync}
+                  disabled={syncing || disconnecting}
+                >
+                  {syncing ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Importa storico
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleWahooDisconnect}
+                  disabled={disconnecting || syncing}
+                  className="border-red-200 text-red-600 hover:bg-red-50"
+                >
+                  {disconnecting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Link2Off className="mr-2 h-4 w-4" />
+                  )}
+                  Disconnetti Wahoo
+                </Button>
+              </div>
             </div>
           ) : (
             <Button variant="outline" size="sm" asChild>
