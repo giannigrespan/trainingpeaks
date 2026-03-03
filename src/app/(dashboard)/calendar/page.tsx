@@ -41,6 +41,10 @@ function formatDuration(seconds: number) {
   return `${m}m`;
 }
 
+function formatKm(meters: number) {
+  return `${(meters / 1000).toFixed(0)}km`;
+}
+
 export default function CalendarPage() {
   const router = useRouter();
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
@@ -51,7 +55,6 @@ export default function CalendarPage() {
     setLoading(true);
     const viewStart = startOfWeek(startOfMonth(month), { weekStartsOn: 1 });
     const viewEnd = endOfWeek(endOfMonth(month), { weekStartsOn: 1 });
-
     try {
       const params = new URLSearchParams({
         from: viewStart.toISOString(),
@@ -72,16 +75,32 @@ export default function CalendarPage() {
     fetchActivities(currentMonth);
   }, [currentMonth, fetchActivities]);
 
-  const days = eachDayOfInterval({
+  const allDays = eachDayOfInterval({
     start: startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 1 }),
     end: endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 1 }),
   });
 
+  // Group into weeks
+  const weeks: Date[][] = [];
+  for (let i = 0; i < allDays.length; i += 7) {
+    weeks.push(allDays.slice(i, i + 7));
+  }
+
   const activitiesForDay = (day: Date) =>
     activities.filter((a) => isSameDay(new Date(a.activityDate), day));
 
+  const weekTotals = (week: Date[]) => {
+    const acts = week.flatMap(activitiesForDay);
+    return {
+      count: acts.length,
+      tss: Math.round(acts.reduce((s, a) => s + (a.tss || 0), 0)),
+      duration: acts.reduce((s, a) => s + (a.duration || 0), 0),
+      distance: acts.reduce((s, a) => s + (a.distance || 0), 0),
+    };
+  };
+
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
@@ -110,8 +129,8 @@ export default function CalendarPage() {
 
       {/* Grid */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
-        {/* Week day headers */}
-        <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800">
+        {/* Headers */}
+        <div className="grid grid-cols-[repeat(7,1fr)_80px] border-b border-zinc-200 dark:border-zinc-800">
           {WEEK_DAYS.map((d) => (
             <div
               key={d}
@@ -120,73 +139,105 @@ export default function CalendarPage() {
               {d}
             </div>
           ))}
+          <div className="py-2 text-center text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide border-l border-zinc-100 dark:border-zinc-800">
+            Sett.
+          </div>
         </div>
 
-        {/* Day cells */}
-        <div className="grid grid-cols-7">
-          {days.map((day, i) => {
-            const inMonth = isSameMonth(day, currentMonth);
-            const today = isToday(day);
-            const dayActivities = activitiesForDay(day);
-            const extra = dayActivities.length - 2;
+        {/* Week rows */}
+        {weeks.map((week, wi) => {
+          const totals = weekTotals(week);
+          return (
+            <div key={wi} className="grid grid-cols-[repeat(7,1fr)_80px]">
+              {/* Day cells */}
+              {week.map((day, di) => {
+                const inMonth = isSameMonth(day, currentMonth);
+                const today = isToday(day);
+                const dayActivities = activitiesForDay(day);
+                const extra = dayActivities.length - 2;
 
-            return (
-              <div
-                key={i}
-                className={cn(
-                  "min-h-[100px] p-1.5 border-b border-r border-zinc-100 dark:border-zinc-800",
-                  !inMonth && "bg-zinc-50 dark:bg-zinc-950/50",
-                  i % 7 === 6 && "border-r-0"
-                )}
-              >
-                {/* Day number */}
-                <div className="flex justify-end mb-1">
-                  <span
+                return (
+                  <div
+                    key={di}
                     className={cn(
-                      "text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full",
-                      today
-                        ? "bg-blue-600 text-white"
-                        : inMonth
-                        ? "text-zinc-700 dark:text-zinc-300"
-                        : "text-zinc-300 dark:text-zinc-600"
+                      "min-h-[100px] p-1.5 border-b border-r border-zinc-100 dark:border-zinc-800",
+                      !inMonth && "bg-zinc-50 dark:bg-zinc-950/50"
                     )}
                   >
-                    {format(day, "d")}
-                  </span>
-                </div>
-
-                {/* Activities */}
-                {loading && inMonth ? (
-                  <div className="h-4 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse mb-1" />
-                ) : (
-                  <>
-                    {dayActivities.slice(0, 2).map((a) => (
-                      <button
-                        key={a._id}
-                        onClick={() => router.push(`/activities/${a._id}`)}
+                    <div className="flex justify-end mb-1">
+                      <span
                         className={cn(
-                          "w-full text-left text-xs rounded px-1.5 py-0.5 mb-0.5 truncate font-medium transition-opacity hover:opacity-80",
-                          tssChipClass(a.tss)
+                          "text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full",
+                          today
+                            ? "bg-blue-600 text-white"
+                            : inMonth
+                            ? "text-zinc-700 dark:text-zinc-300"
+                            : "text-zinc-300 dark:text-zinc-600"
                         )}
-                        title={`${a.name} — ${formatDuration(a.duration)}${a.tss ? ` — TSS ${Math.round(a.tss)}` : ""}`}
                       >
-                        {a.name || a.sport}
-                        <span className="opacity-60 ml-1">
-                          {formatDuration(a.duration)}
-                        </span>
-                      </button>
-                    ))}
-                    {extra > 0 && (
-                      <span className="text-xs text-zinc-400 dark:text-zinc-500 pl-1">
-                        +{extra} altre
+                        {format(day, "d")}
+                      </span>
+                    </div>
+
+                    {loading && inMonth ? (
+                      <div className="h-4 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse mb-1" />
+                    ) : (
+                      <>
+                        {dayActivities.slice(0, 2).map((a) => (
+                          <button
+                            key={a._id}
+                            onClick={() => router.push(`/activities/${a._id}`)}
+                            className={cn(
+                              "w-full text-left text-xs rounded px-1.5 py-0.5 mb-0.5 truncate font-medium transition-opacity hover:opacity-80",
+                              tssChipClass(a.tss)
+                            )}
+                            title={`${a.name} — ${formatDuration(a.duration)}${a.tss ? ` — TSS ${Math.round(a.tss)}` : ""}`}
+                          >
+                            {a.name || a.sport}
+                            <span className="opacity-60 ml-1">
+                              {formatDuration(a.duration)}
+                            </span>
+                          </button>
+                        ))}
+                        {extra > 0 && (
+                          <span className="text-xs text-zinc-400 dark:text-zinc-500 pl-1">
+                            +{extra} altre
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Weekly totals cell */}
+              <div className="min-h-[100px] p-2 border-b border-zinc-100 dark:border-zinc-800 border-l bg-zinc-50/80 dark:bg-zinc-950/40 flex flex-col justify-center gap-1">
+                {totals.count > 0 ? (
+                  <>
+                    <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                      {totals.count} att.
+                    </span>
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {formatDuration(totals.duration)}
+                    </span>
+                    {totals.distance > 0 && (
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {formatKm(totals.distance)}
+                      </span>
+                    )}
+                    {totals.tss > 0 && (
+                      <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                        TSS {totals.tss}
                       </span>
                     )}
                   </>
+                ) : (
+                  <span className="text-xs text-zinc-300 dark:text-zinc-700">—</span>
                 )}
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Legend */}

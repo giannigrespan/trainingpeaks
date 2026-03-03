@@ -16,6 +16,16 @@ import {
   Trash2,
 } from "lucide-react";
 import { PMCChart } from "@/components/charts/pmc-chart";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -29,6 +39,12 @@ interface ActivitySummary {
   normalizedPower: number;
   avgPower: number;
   intensityFactor: number;
+}
+
+interface PowerCurvePoint {
+  duration: number;
+  allTime: number;
+  recent: number;
 }
 
 interface PMCEntry {
@@ -118,20 +134,23 @@ export default function DashboardPage() {
   const [powerZones, setPowerZones] = useState<PowerZones | null>(null);
   const [ftp, setFtp] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [powerCurve, setPowerCurve] = useState<PowerCurvePoint[]>([]);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/activities?limit=10").then((r) => r.json()),
       fetch("/api/analytics/pmc?days=90").then((r) => r.json()),
       fetch("/api/user/profile").then((r) => r.json()),
+      fetch("/api/analytics/power-curve").then((r) => r.json()),
     ])
-      .then(([actRes, pmcRes, profileRes]) => {
+      .then(([actRes, pmcRes, profileRes, pcRes]) => {
         if (actRes.success) setActivities(actRes.data);
         if (pmcRes.success) setPmcData(pmcRes.data);
         if (profileRes.success && profileRes.data) {
           setPowerZones(profileRes.data.powerZones ?? null);
           setFtp(profileRes.data.ftp ?? 0);
         }
+        if (pcRes.success) setPowerCurve(pcRes.data);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -407,6 +426,70 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Power Curve Evolution */}
+      {powerCurve.length > 0 && (
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-6">
+          <div className="mb-4">
+            <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-100">
+              Curva di Potenza
+            </h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Best ever vs ultimi 90 giorni
+            </p>
+          </div>
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={powerCurve} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-zinc-100 dark:text-zinc-800" />
+              <XAxis
+                dataKey="duration"
+                tickFormatter={(d: number) =>
+                  d < 60 ? `${d}s` : d < 3600 ? `${d / 60}m` : `${d / 3600}h`
+                }
+                tick={{ fontSize: 11 }}
+                stroke="currentColor"
+                className="text-zinc-400"
+              />
+              <YAxis
+                tickFormatter={(v: number) => `${v}W`}
+                tick={{ fontSize: 11 }}
+                width={48}
+                stroke="currentColor"
+                className="text-zinc-400"
+              />
+              <Tooltip
+                formatter={(v: number, name: string) => [
+                  `${v}W`,
+                  name === "allTime" ? "Best ever" : "Ultimi 90gg",
+                ]}
+                labelFormatter={(d: number) =>
+                  d < 60 ? `${d} sec` : d < 3600 ? `${d / 60} min` : `${d / 3600}h`
+                }
+                contentStyle={{ fontSize: 12 }}
+              />
+              <Legend
+                formatter={(v) => (v === "allTime" ? "Best ever" : "Ultimi 90 giorni")}
+                wrapperStyle={{ fontSize: 12 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="allTime"
+                stroke="#a1a1aa"
+                strokeDasharray="4 2"
+                dot={false}
+                strokeWidth={2}
+              />
+              <Line
+                type="monotone"
+                dataKey="recent"
+                stroke="#3b82f6"
+                dot={false}
+                strokeWidth={2.5}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }
