@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
 
     for (const workout of workouts) {
       const wahooWorkoutId = String(workout.id);
+      await new Promise((r) => setTimeout(r, 300));
 
       const existing = await db
         .collection("activities")
