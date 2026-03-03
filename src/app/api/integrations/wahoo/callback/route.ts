@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/mongodb";
-import {
-  exchangeCodeForTokens,
-  getWahooUserId,
-  registerWebhook,
-} from "@/lib/wahoo-client";
+import { exchangeCodeForTokens, getWahooUserId } from "@/lib/wahoo-client";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -46,10 +42,6 @@ export async function GET(req: NextRequest) {
     const tokens = await exchangeCodeForTokens(code);
     const wahooUserId = await getWahooUserId(tokens.accessToken);
 
-    // Register webhook with Wahoo so it notifies us on new workouts.
-    const webhookToken = crypto.randomUUID();
-    await registerWebhook(tokens.accessToken, webhookToken);
-
     await db.collection("users").updateOne(
       { _id: new ObjectId(stateData.userId) },
       {
@@ -60,7 +52,6 @@ export async function GET(req: NextRequest) {
             refreshToken: tokens.refreshToken,
             expiresAt: tokens.expiresAt,
             wahooUserId,
-            webhookSecret: webhookToken,
             connectedAt: new Date(),
             lastSyncAt: null,
           },
