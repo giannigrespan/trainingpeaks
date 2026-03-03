@@ -93,3 +93,24 @@ export async function downloadFitFile(url: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
+export async function registerWebhook(
+  accessToken: string,
+  webhookToken: string
+): Promise<void> {
+  const res = await fetch(`${WAHOO_BASE_URL}/v1/user/webhooks`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      webhook_url: `${WAHOO_APP_URL}/api/integrations/wahoo/webhook`,
+      webhook_token: webhookToken,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to register Wahoo webhook: ${res.status} ${text}`);
+  }
+}
+

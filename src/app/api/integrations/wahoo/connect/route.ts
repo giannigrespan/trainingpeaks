@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getDb } from "@/lib/mongodb";
 import { getAuthorizationUrl } from "@/lib/wahoo-client";
 
 export async function GET(req: NextRequest) {
@@ -13,14 +14,15 @@ export async function GET(req: NextRequest) {
   const nonce = crypto.randomUUID();
   const state = Buffer.from(JSON.stringify({ userId, nonce })).toString("base64url");
 
-  const authUrl = getAuthorizationUrl(state);
-
-  const response = NextResponse.redirect(authUrl);
-  response.cookies.set("wahoo_oauth_nonce", nonce, {
-    httpOnly: true,
-    sameSite: "lax",
-    maxAge: 600,
-    path: "/",
+  // Store nonce server-side so validation works regardless of which domain
+  // the callback arrives on (e.g. preview vs. production deployment).
+  const db = await getDb();
+  await db.collection("oauth_nonces").insertOne({
+    userId,
+    nonce,
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
   });
-  return response;
+
+  const authUrl = getAuthorizationUrl(state);
+  return NextResponse.redirect(authUrl);
 }
