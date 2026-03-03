@@ -458,8 +458,8 @@ export default function DashboardPage() {
                 className="text-zinc-400"
               />
               <Tooltip
-                formatter={(v: number, name: string) => [
-                  `${v}W`,
+                formatter={(v: number | undefined, name: string) => [
+                  v != null ? `${v}W` : "—",
                   name === "allTime" ? "Best ever" : "Ultimi 90gg",
                 ]}
                 labelFormatter={(d: number) =>
