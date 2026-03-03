@@ -18,19 +18,29 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "20");
     const sort = searchParams.get("sort") || "activityDate";
     const order = searchParams.get("order") === "asc" ? 1 : -1;
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
 
     const db = await getDb();
     const userId = (session.user as { id: string }).id;
 
+    const query: Record<string, unknown> = { userId };
+    if (from || to) {
+      const dateFilter: Record<string, Date> = {};
+      if (from) dateFilter.$gte = new Date(from);
+      if (to) dateFilter.$lte = new Date(to);
+      query.activityDate = dateFilter;
+    }
+
     const [activities, total] = await Promise.all([
       db
         .collection("activities")
-        .find({ userId })
+        .find(query)
         .sort({ [sort]: order })
         .skip((page - 1) * limit)
         .limit(limit)
         .toArray(),
-      db.collection("activities").countDocuments({ userId }),
+      db.collection("activities").countDocuments(query),
     ]);
 
     return NextResponse.json({
