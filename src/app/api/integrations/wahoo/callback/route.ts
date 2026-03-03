@@ -4,6 +4,7 @@ import { getDb } from "@/lib/mongodb";
 import {
   exchangeCodeForTokens,
   getWahooUserId,
+  registerWebhook,
 } from "@/lib/wahoo-client";
 
 export async function GET(req: NextRequest) {
@@ -31,15 +32,24 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(`${redirectBase}?wahoo=error&reason=invalid_state`);
     }
 
-    const storedNonce = req.cookies.get("wahoo_oauth_nonce")?.value;
-    if (!storedNonce || storedNonce !== stateData.nonce) {
+    // Validate nonce from DB (domain-agnostic, works across preview/production).
+    const db = await getDb();
+    const nonceDoc = await db.collection("oauth_nonces").findOneAndDelete({
+      userId: stateData.userId,
+      nonce: stateData.nonce,
+      expiresAt: { $gt: new Date() },
+    });
+    if (!nonceDoc) {
       return NextResponse.redirect(`${redirectBase}?wahoo=error&reason=csrf`);
     }
 
     const tokens = await exchangeCodeForTokens(code);
     const wahooUserId = await getWahooUserId(tokens.accessToken);
 
-    const db = await getDb();
+    // Register webhook with Wahoo so it notifies us on new workouts.
+    const webhookToken = crypto.randomUUID();
+    await registerWebhook(tokens.accessToken, webhookToken);
+
     await db.collection("users").updateOne(
       { _id: new ObjectId(stateData.userId) },
       {
@@ -50,6 +60,7 @@ export async function GET(req: NextRequest) {
             refreshToken: tokens.refreshToken,
             expiresAt: tokens.expiresAt,
             wahooUserId,
+            webhookSecret: webhookToken,
             connectedAt: new Date(),
             lastSyncAt: null,
           },
@@ -57,9 +68,7 @@ export async function GET(req: NextRequest) {
       }
     );
 
-    const response = NextResponse.redirect(`${redirectBase}?wahoo=connected`);
-    response.cookies.delete("wahoo_oauth_nonce");
-    return response;
+    return NextResponse.redirect(`${redirectBase}?wahoo=connected`);
   } catch (err) {
     console.error("[Wahoo] Callback error:", err);
     return NextResponse.redirect(`${redirectBase}?wahoo=error&reason=server_error`);
