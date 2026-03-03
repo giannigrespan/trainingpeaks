@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Save, Zap, Heart, User, Link2, Link2Off, RefreshCw } from "lucide-react";
+import { Loader2, Save, Zap, Heart, User, Link2, Link2Off, RefreshCw, Lightbulb } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +47,15 @@ export default function SettingsPage() {
   const [ftp, setFtp] = useState(200);
   const [weight, setWeight] = useState(70);
 
+  // FTP suggestion
+  const [ftpSuggestion, setFtpSuggestion] = useState<{
+    suggestedFtp: number;
+    bestPower: number;
+    bestDurationMinutes: number;
+    activityName: string;
+    activityDate: string;
+  } | null>(null);
+
   // Wahoo state
   const [wahooStatus, setWahooStatus] = useState<WahooStatus | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -68,6 +77,10 @@ export default function SettingsPage() {
     fetch("/api/integrations/wahoo/status")
       .then((res) => res.json())
       .then((data) => { if (data.success) setWahooStatus(data.data); });
+
+    fetch("/api/analytics/ftp-suggestion")
+      .then((res) => res.json())
+      .then((data) => { if (data.success && data.data) setFtpSuggestion(data.data); });
 
     // Handle OAuth redirect result
     const params = new URLSearchParams(window.location.search);
@@ -243,6 +256,30 @@ export default function SettingsPage() {
               />
             </div>
           </div>
+          {ftpSuggestion && ftpSuggestion.suggestedFtp !== ftp && (
+            <div className="flex items-center justify-between gap-3 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 px-3 py-2.5">
+              <div className="flex items-start gap-2">
+                <Lightbulb className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                <div className="text-sm">
+                  <span className="font-semibold text-blue-700 dark:text-blue-300">
+                    FTP suggerito: {ftpSuggestion.suggestedFtp}W
+                  </span>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
+                    Best {ftpSuggestion.bestDurationMinutes}min = {ftpSuggestion.bestPower}W
+                    {ftpSuggestion.activityName ? ` · "${ftpSuggestion.activityName}"` : ""}
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 flex-shrink-0"
+                onClick={() => setFtp(ftpSuggestion.suggestedFtp)}
+              >
+                Applica
+              </Button>
+            </div>
+          )}
           <div className="text-sm text-gray-500">
             W/kg: <span className="font-semibold tabular-nums">{weight > 0 ? (ftp / weight).toFixed(2) : "0"}</span>
           </div>
