@@ -78,12 +78,19 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      let fitUrl: string | null = workout.file?.url ?? null;
+      let fitUrl: string | null =
+        workout.file?.url ?? workout.workout_summary?.file?.url ?? null;
       if (!fitUrl) {
         try {
           const detail = await getWorkout(accessToken, wahooWorkoutId);
-          fitUrl = detail.file?.url ?? null;
-        } catch {
+          fitUrl = detail.file?.url ?? detail.workout_summary?.file?.url ?? null;
+          if (!fitUrl) {
+            console.warn(
+              `[Wahoo sync] No FIT URL for workout ${wahooWorkoutId}. Detail keys: ${Object.keys(detail).join(", ")}`
+            );
+          }
+        } catch (err) {
+          console.error(`[Wahoo sync] getWorkout(${wahooWorkoutId}) error:`, err);
           errors++;
           continue;
         }
@@ -123,7 +130,7 @@ export async function POST(req: NextRequest) {
   );
 
   console.log(
-    `[Wahoo sync] userId=${userId} imported=${imported} skipped=${skipped} errors=${errors}`
+    `[Wahoo sync] userId=${userId} imported=${imported} skipped=${skipped} errors=${errors} pages=${page}`
   );
   return NextResponse.json({ imported, skipped, errors });
 }
