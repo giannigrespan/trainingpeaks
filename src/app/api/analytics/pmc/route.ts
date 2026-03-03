@@ -39,8 +39,11 @@ export async function GET(req: NextRequest) {
     // Build daily TSS map
     const tssMap = new Map<string, number>();
     for (const a of activities) {
+      // Skip activities with clearly corrupt TSS values (> 500 is physically impossible
+      // for a single workout — guards against bad FIT duration parsing)
+      const tss = typeof a.tss === "number" && a.tss > 0 && a.tss <= 500 ? a.tss : 0;
       const dateKey = format(new Date(a.activityDate), "yyyy-MM-dd");
-      tssMap.set(dateKey, (tssMap.get(dateKey) || 0) + (a.tss || 0));
+      tssMap.set(dateKey, (tssMap.get(dateKey) || 0) + tss);
     }
 
     // Fill all days (warm-up + display window)

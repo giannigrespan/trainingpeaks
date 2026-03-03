@@ -26,7 +26,10 @@ export async function importFitBuffer(buffer: Buffer, options: ImportOptions) {
   const powerData = parsedData.power.filter((p: number) => p > 0);
   const np = calculateNormalizedPower(powerData);
   const intensityFactor = calculateIntensityFactor(np, ftp);
-  const tss = calculateTSS(parsedData.duration, np, intensityFactor, ftp);
+  const rawTss = calculateTSS(parsedData.duration, np, intensityFactor, ftp);
+  // Cap at 500 TSS (a 10h ultra-endurance event is ~400-450) to guard against
+  // corrupt FIT duration values (e.g. 0xFFFFFFFF sentinel in session message)
+  const tss = Math.min(rawTss, 500);
   const powerCurve = calculatePowerCurve(powerData);
 
   const activityName =
