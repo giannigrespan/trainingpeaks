@@ -110,7 +110,8 @@ export async function registerWebhook(
   });
   if (!res.ok) throw new Error(`Webhook registration failed: ${res.status}`);
   const data = await res.json();
-  return { id: String(data.id), secret: data.webhook_secret };
+  // Wahoo returns "webhook_token" in the response
+  return { id: String(data.id), secret: data.webhook_token ?? data.webhook_secret };
 }
 
 export async function deleteWebhook(
