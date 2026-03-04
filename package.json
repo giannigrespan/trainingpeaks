@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "stripe:setup": "ts-node --skip-project scripts/stripe-setup.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
