@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
@@ -174,13 +177,24 @@ const ZONE_KEYS = ["z1", "z2", "z3", "z4", "z5"] as const;
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function DashboardPage() {
+function DashboardContent() {
+  const searchParams = useSearchParams();
+  const checkoutSuccess = searchParams.get("checkout") === "success";
+  const { update: updateSession } = useSession();
   const [activities, setActivities] = useState<ActivitySummary[]>([]);
   const [pmcData, setPmcData] = useState<PMCEntry[]>([]);
   const [powerZones, setPowerZones] = useState<PowerZones | null>(null);
   const [ftp, setFtp] = useState(0);
   const [loading, setLoading] = useState(true);
   const [powerCurve, setPowerCurve] = useState<PowerCurvePoint[]>([]);
+
+  // Verifica e attiva l'abbonamento dopo il ritorno da PayPal
+  useEffect(() => {
+    if (!checkoutSuccess) return;
+    fetch("/api/billing/verify-subscription", { method: "POST" })
+      .then(() => updateSession())
+      .catch(console.error);
+  }, [checkoutSuccess, updateSession]);
 
   useEffect(() => {
     Promise.all([
@@ -237,6 +251,11 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {checkoutSuccess && (
+        <div className="rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-700 dark:text-green-300">
+          Abbonamento attivato! Benvenuto in CycloPower Pro.
+        </div>
+      )}
       {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
@@ -526,5 +545,14 @@ export default function DashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+
+export default function DashboardPage() {
+  return (
+    <Suspense>
+      <DashboardContent />
+    </Suspense>
   );
 }
