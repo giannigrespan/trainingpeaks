@@ -13,7 +13,6 @@ import type { Workout, WorkoutStep } from "@/types/workout";
 
 export default function WorkoutDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const { toast } = useToast();
 
   const [workout, setWorkout] = useState<Workout | null>(null);
