@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WorkoutPlayer } from "@/components/workouts/WorkoutPlayer";
-import { calculateNormalizedPower, calculateIntensityFactor, calculateTSS } from "@/lib/cycling-metrics";
+import { calculateIntensityFactor } from "@/lib/cycling-metrics";
 import { useToast } from "@/hooks/use-toast";
 import type { Workout } from "@/types/workout";
 
