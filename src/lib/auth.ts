@@ -56,6 +56,7 @@ export const authOptions: NextAuthOptions = {
           .findOne({ _id: new ObjectId(user.id) });
         token.subscriptionStatus = dbUser?.subscriptionStatus ?? "none";
         token.trialEndsAt = dbUser?.trialEndsAt?.toISOString() ?? null;
+        token.role = dbUser?.role ?? "user";
       }
       return token;
     },
@@ -69,6 +70,7 @@ export const authOptions: NextAuthOptions = {
         u.id = token.id as string;
         u.subscriptionStatus = token.subscriptionStatus as string;
         u.trialEndsAt = token.trialEndsAt as string | null;
+        (u as typeof u & { role?: string }).role = token.role as string;
       }
       return session;
     },

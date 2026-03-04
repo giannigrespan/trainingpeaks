@@ -33,6 +33,14 @@ export async function middleware(req: NextRequest) {
     status === "active" ||
     (status === "trialing" && trialEndsAt != null && trialEndsAt > new Date());
 
+  // Admin routes — require role = "admin"
+  if (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) {
+    if (token.role !== "admin") {
+      return NextResponse.redirect(new URL("/dashboard", req.url));
+    }
+    return NextResponse.next();
+  }
+
   if (!isActive) {
     return NextResponse.redirect(new URL("/subscribe", req.url));
   }
