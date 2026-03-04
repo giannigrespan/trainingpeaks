@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
-import { getStripe } from "@/lib/stripe";
+import { paypalRequest } from "@/lib/paypal";
 
 type Params = { params: { id: string } };
 
@@ -63,16 +63,20 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json({ ok: true, subscriptionStatus: status });
   }
 
-  // ── cancel_stripe: cancel subscription on Stripe and mark canceled ──
-  if (action === "cancel_stripe") {
-    if (!user.stripeSubscriptionId) {
+  // ── cancel_paypal: cancel subscription on PayPal and mark canceled ──
+  if (action === "cancel_paypal") {
+    if (!user.paypalSubscriptionId) {
       return NextResponse.json(
-        { error: "Nessun abbonamento Stripe attivo" },
+        { error: "Nessun abbonamento PayPal attivo" },
         { status: 400 }
       );
     }
 
-    await getStripe().subscriptions.cancel(user.stripeSubscriptionId);
+    await paypalRequest(
+      "POST",
+      `/v1/billing/subscriptions/${user.paypalSubscriptionId}/cancel`,
+      { reason: "Cancellato dall'amministratore" }
+    );
 
     await db.collection("users").updateOne(
       { _id: new ObjectId(params.id) },

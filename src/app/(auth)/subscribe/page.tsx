@@ -141,7 +141,7 @@ function SubscribeContent() {
           </button>
 
           <p className="mt-4 text-center text-xs text-zinc-400 dark:text-zinc-500">
-            Annulla in qualsiasi momento. Pagamento sicuro via Stripe.
+            Annulla in qualsiasi momento. Pagamento sicuro via PayPal.
           </p>
         </div>
       </div>
