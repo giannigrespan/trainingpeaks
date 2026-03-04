@@ -10,8 +10,7 @@ export async function GET(req: NextRequest) {
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
-  const WAHOO_APP_URL = "https://trainingpeaks.vercel.app";
-  const redirectBase = `${WAHOO_APP_URL}/settings`;
+  const redirectBase = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/settings`;
 
   if (error) {
     return NextResponse.redirect(`${redirectBase}?wahoo=error&reason=${error}`);
