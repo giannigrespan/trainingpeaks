@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "stripe:setup": "ts-node --skip-project scripts/stripe-setup.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -22,6 +23,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "fast-xml-parser": "^5.4.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.563.0",
     "mongodb": "^7.1.0",
@@ -33,6 +35,7 @@
     "react-hook-form": "^7.71.1",
     "react-leaflet": "^4.2.1",
     "recharts": "^3.7.0",
+    "stripe": "^20.4.0",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "zod": "^4.3.6",
@@ -44,6 +47,8 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@types/uuid": "^10.0.0",
+    "@types/web-bluetooth": "^0.0.21",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
     "postcss": "^8",

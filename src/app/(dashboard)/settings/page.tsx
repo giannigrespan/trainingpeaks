@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Save, Zap, Heart, User, Link2, Link2Off, RefreshCw, Lightbulb } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { Loader2, Save, Zap, Heart, User, Link2, Link2Off, RefreshCw, Lightbulb, CreditCard } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,10 +38,12 @@ interface WahooStatus {
 }
 
 export default function SettingsPage() {
+  const { data: session } = useSession();
   const { toast } = useToast();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [billingLoading, setBillingLoading] = useState(false);
 
   // Form state
   const [name, setName] = useState("");
@@ -154,6 +157,19 @@ export default function SettingsPage() {
       });
     } finally {
       setDisconnecting(false);
+    }
+  }
+
+  async function handleManageBilling() {
+    setBillingLoading(true);
+    try {
+      const res = await fetch("/api/billing/portal", { method: "POST" });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    } catch {
+      toast({ title: "Errore", description: "Impossibile aprire il portale di fatturazione.", variant: "destructive" });
+    } finally {
+      setBillingLoading(false);
     }
   }
 
@@ -415,6 +431,83 @@ export default function SettingsPage() {
               </a>
             </Button>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Abbonamento */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <CreditCard className="h-5 w-5" /> Abbonamento
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {(() => {
+            const u = session?.user as
+              | { subscriptionStatus?: string; trialEndsAt?: string | null }
+              | undefined;
+            const status = u?.subscriptionStatus;
+            const trialEndsAt = u?.trialEndsAt ? new Date(u.trialEndsAt) : null;
+            const daysLeft = trialEndsAt
+              ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / 86400000))
+              : 0;
+
+            if (status === "active") {
+              return (
+                <>
+                  <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                    <span className="h-2 w-2 rounded-full bg-green-500" />
+                    Abbonamento attivo — CycloPower Pro $4.99/mese
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleManageBilling}
+                    disabled={billingLoading}
+                  >
+                    {billingLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Gestisci abbonamento
+                  </Button>
+                </>
+              );
+            }
+            if (status === "trialing") {
+              return (
+                <>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                    Prova gratuita —{" "}
+                    {daysLeft === 1 ? "rimane 1 giorno" : `rimangono ${daysLeft} giorni`}
+                  </p>
+                  <Button size="sm" asChild>
+                    <a href="/subscribe">Sottoscrivi ora</a>
+                  </Button>
+                </>
+              );
+            }
+            if (status === "past_due") {
+              return (
+                <>
+                  <p className="text-sm text-red-600 dark:text-red-400">
+                    Pagamento non riuscito — aggiorna il metodo di pagamento
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleManageBilling}
+                    disabled={billingLoading}
+                  >
+                    {billingLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Aggiorna pagamento
+                  </Button>
+                </>
+              );
+            }
+            return (
+              <Button size="sm" asChild>
+                <a href="/subscribe">Sottoscrivi — $4.99/mese</a>
+              </Button>
+            );
+          })()}
         </CardContent>
       </Card>
 

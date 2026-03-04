@@ -1,6 +1,7 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
+import { ObjectId } from "mongodb";
 import { getDb } from "./mongodb";
 
 export const authOptions: NextAuthOptions = {
@@ -48,12 +49,28 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        // Leggi stato abbonamento al momento del login
+        const db = await getDb();
+        const dbUser = await db
+          .collection("users")
+          .findOne({ _id: new ObjectId(user.id) });
+        token.subscriptionStatus = dbUser?.subscriptionStatus ?? "none";
+        token.trialEndsAt = dbUser?.trialEndsAt?.toISOString() ?? null;
+        token.role = dbUser?.role ?? "user";
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as { id?: string }).id = token.id as string;
+        const u = session.user as {
+          id?: string;
+          subscriptionStatus?: string;
+          trialEndsAt?: string | null;
+        };
+        u.id = token.id as string;
+        u.subscriptionStatus = token.subscriptionStatus as string;
+        u.trialEndsAt = token.trialEndsAt as string | null;
+        (u as typeof u & { role?: string }).role = token.role as string;
       }
       return session;
     },
