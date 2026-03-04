@@ -46,7 +46,7 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
         // Leggi stato abbonamento al momento del login
@@ -57,6 +57,18 @@ export const authOptions: NextAuthOptions = {
         token.subscriptionStatus = dbUser?.subscriptionStatus ?? "none";
         token.trialEndsAt = dbUser?.trialEndsAt?.toISOString() ?? null;
         token.role = dbUser?.role ?? "user";
+      }
+      // Aggiorna dati dal DB quando la sessione viene aggiornata manualmente
+      if (trigger === "update" && token.id) {
+        const db = await getDb();
+        const dbUser = await db
+          .collection("users")
+          .findOne({ _id: new ObjectId(token.id as string) });
+        if (dbUser) {
+          token.subscriptionStatus = dbUser.subscriptionStatus ?? "none";
+          token.trialEndsAt = dbUser.trialEndsAt?.toISOString() ?? null;
+          token.role = dbUser.role ?? "user";
+        }
       }
       return token;
     },

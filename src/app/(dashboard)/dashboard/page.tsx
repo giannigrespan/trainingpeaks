@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import Link from "next/link";
@@ -179,12 +180,21 @@ const ZONE_KEYS = ["z1", "z2", "z3", "z4", "z5"] as const;
 function DashboardContent() {
   const searchParams = useSearchParams();
   const checkoutSuccess = searchParams.get("checkout") === "success";
+  const { update: updateSession } = useSession();
   const [activities, setActivities] = useState<ActivitySummary[]>([]);
   const [pmcData, setPmcData] = useState<PMCEntry[]>([]);
   const [powerZones, setPowerZones] = useState<PowerZones | null>(null);
   const [ftp, setFtp] = useState(0);
   const [loading, setLoading] = useState(true);
   const [powerCurve, setPowerCurve] = useState<PowerCurvePoint[]>([]);
+
+  // Verifica e attiva l'abbonamento dopo il ritorno da PayPal
+  useEffect(() => {
+    if (!checkoutSuccess) return;
+    fetch("/api/billing/verify-subscription", { method: "POST" })
+      .then(() => updateSession())
+      .catch(console.error);
+  }, [checkoutSuccess, updateSession]);
 
   useEffect(() => {
     Promise.all([
