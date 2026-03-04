@@ -41,7 +41,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  if (!isActive) {
+  if (!isActive && token.role !== "admin") {
     return NextResponse.redirect(new URL("/subscribe", req.url));
   }
 
