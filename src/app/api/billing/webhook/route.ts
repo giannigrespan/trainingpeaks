@@ -1,60 +1,61 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { ObjectId } from "mongodb";
-import { getStripe } from "@/lib/stripe";
 import { getDb } from "@/lib/mongodb";
-import type Stripe from "stripe";
+import { verifyWebhookSignature } from "@/lib/paypal";
+
+interface PayPalWebhookEvent {
+  event_type: string;
+  resource: {
+    id: string;
+    custom_id?: string;
+    status?: string;
+    billing_info?: {
+      next_billing_time?: string;
+      last_payment?: { time?: string };
+    };
+  };
+}
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
-  const sig = req.headers.get("stripe-signature");
 
-  if (!sig) {
-    return NextResponse.json({ error: "Firma mancante" }, { status: 400 });
-  }
+  const headers: Record<string, string | null> = {
+    "paypal-auth-algo": req.headers.get("paypal-auth-algo"),
+    "paypal-cert-url": req.headers.get("paypal-cert-url"),
+    "paypal-transmission-id": req.headers.get("paypal-transmission-id"),
+    "paypal-transmission-sig": req.headers.get("paypal-transmission-sig"),
+    "paypal-transmission-time": req.headers.get("paypal-transmission-time"),
+  };
 
-  let event: Stripe.Event;
-  try {
-    event = getStripe().webhooks.constructEvent(
-      body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
-  } catch (err) {
-    console.error("Webhook signature error:", err);
+  const isValid = await verifyWebhookSignature(headers, body);
+  if (!isValid) {
     return NextResponse.json({ error: "Firma non valida" }, { status: 400 });
   }
 
+  let event: PayPalWebhookEvent;
+  try {
+    event = JSON.parse(body);
+  } catch {
+    return NextResponse.json({ error: "Body non valido" }, { status: 400 });
+  }
+
   const db = await getDb();
+  const resource = event.resource;
 
-  switch (event.type) {
-    case "checkout.session.completed": {
-      const session = event.data.object as Stripe.Checkout.Session;
-      if (session.mode !== "subscription") break;
-
-      // userId passed as client_reference_id during checkout session creation
-      const userId = session.client_reference_id;
+  switch (event.event_type) {
+    case "BILLING.SUBSCRIPTION.ACTIVATED": {
+      const userId = resource.custom_id;
       if (!userId) break;
 
-      const subId =
-        typeof session.subscription === "string"
-          ? session.subscription
-          : session.subscription?.id;
-      if (!subId) break;
-
-      const subscription = await getStripe().subscriptions.retrieve(subId);
-
+      const nextBillingTime = resource.billing_info?.next_billing_time;
       await db.collection("users").updateOne(
-        { _id: new ObjectId(userId) },
+        { paypalSubscriptionId: resource.id },
         {
           $set: {
             subscriptionStatus: "active",
-            stripeCustomerId: session.customer as string,
-            stripeSubscriptionId: subscription.id,
-            // billing_cycle_anchor is the next billing reference in Stripe v20 API
-            subscriptionCurrentPeriodEnd: new Date(
-              subscription.billing_cycle_anchor * 1000
-            ),
+            ...(nextBillingTime && {
+              subscriptionCurrentPeriodEnd: new Date(nextBillingTime),
+            }),
             updatedAt: new Date(),
           },
         }
@@ -62,16 +63,17 @@ export async function POST(req: NextRequest) {
       break;
     }
 
-    case "customer.subscription.updated": {
-      const sub = event.data.object as Stripe.Subscription;
+    case "BILLING.SUBSCRIPTION.RENEWED":
+    case "PAYMENT.SALE.COMPLETED": {
+      const nextBillingTime = resource.billing_info?.next_billing_time;
       await db.collection("users").updateOne(
-        { stripeSubscriptionId: sub.id },
+        { paypalSubscriptionId: resource.id },
         {
           $set: {
-            subscriptionStatus: sub.status,
-            subscriptionCurrentPeriodEnd: new Date(
-              sub.billing_cycle_anchor * 1000
-            ),
+            subscriptionStatus: "active",
+            ...(nextBillingTime && {
+              subscriptionCurrentPeriodEnd: new Date(nextBillingTime),
+            }),
             updatedAt: new Date(),
           },
         }
@@ -79,10 +81,10 @@ export async function POST(req: NextRequest) {
       break;
     }
 
-    case "customer.subscription.deleted": {
-      const sub = event.data.object as Stripe.Subscription;
+    case "BILLING.SUBSCRIPTION.CANCELLED":
+    case "BILLING.SUBSCRIPTION.EXPIRED": {
       await db.collection("users").updateOne(
-        { stripeSubscriptionId: sub.id },
+        { paypalSubscriptionId: resource.id },
         {
           $set: {
             subscriptionStatus: "canceled",
@@ -93,19 +95,10 @@ export async function POST(req: NextRequest) {
       break;
     }
 
-    case "invoice.payment_failed": {
-      const invoice = event.data.object as Stripe.Invoice;
-      // In Stripe v20 API, subscription reference is via invoice.parent.subscription_details
-      const subDetails = invoice.parent?.subscription_details;
-      if (!subDetails) break;
-      const subId =
-        typeof subDetails.subscription === "string"
-          ? subDetails.subscription
-          : subDetails.subscription?.id;
-      if (!subId) break;
-
+    case "BILLING.SUBSCRIPTION.SUSPENDED":
+    case "BILLING.SUBSCRIPTION.PAYMENT.FAILED": {
       await db.collection("users").updateOne(
-        { stripeSubscriptionId: subId },
+        { paypalSubscriptionId: resource.id },
         {
           $set: {
             subscriptionStatus: "past_due",

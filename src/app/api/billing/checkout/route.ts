@@ -2,9 +2,14 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getStripe } from "@/lib/stripe";
+import { paypalRequest } from "@/lib/paypal";
 import { getDb } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
+
+interface PayPalSubscription {
+  id: string;
+  links: { rel: string; href: string }[];
+}
 
 export async function POST() {
   try {
@@ -23,40 +28,44 @@ export async function POST() {
       return NextResponse.json({ error: "Utente non trovato" }, { status: 404 });
     }
 
-    // Crea o recupera il cliente Stripe
-    let stripeCustomerId: string = user.stripeCustomerId ?? "";
-    if (!stripeCustomerId) {
-      const customer = await getStripe().customers.create({
-        email: user.email,
-        name: user.name,
-        metadata: { userId },
-      });
-      stripeCustomerId = customer.id;
-      await db
-        .collection("users")
-        .updateOne(
-          { _id: new ObjectId(userId) },
-          { $set: { stripeCustomerId, updatedAt: new Date() } }
-        );
-    }
-
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-    const checkoutSession = await getStripe().checkout.sessions.create({
-      customer: stripeCustomerId,
-      mode: "subscription",
-      client_reference_id: userId, // used in webhook to identify the user
-      line_items: [
-        {
-          price: process.env.STRIPE_PRICE_ID!,
-          quantity: 1,
+    const subscription = await paypalRequest<PayPalSubscription>(
+      "POST",
+      "/v1/billing/subscriptions",
+      {
+        plan_id: process.env.PAYPAL_PLAN_ID!,
+        custom_id: userId,
+        subscriber: {
+          email_address: user.email,
+          name: {
+            given_name: (user.name ?? "").split(" ")[0] ?? "",
+            surname: (user.name ?? "").split(" ").slice(1).join(" ") ?? "",
+          },
         },
-      ],
-      success_url: `${appUrl}/dashboard?checkout=success`,
-      cancel_url: `${appUrl}/subscribe?checkout=canceled`,
-    });
+        application_context: {
+          brand_name: "CycloPower",
+          locale: "it-IT",
+          shipping_preference: "NO_SHIPPING",
+          user_action: "SUBSCRIBE_NOW",
+          return_url: `${appUrl}/dashboard?checkout=success`,
+          cancel_url: `${appUrl}/subscribe?checkout=canceled`,
+        },
+      }
+    );
 
-    return NextResponse.json({ url: checkoutSession.url });
+    const approveLink = subscription.links.find((l) => l.rel === "approve");
+    if (!approveLink) {
+      throw new Error("PayPal approval URL not found in response");
+    }
+
+    // Store subscription ID so we can reference it before webhook fires
+    await db.collection("users").updateOne(
+      { _id: new ObjectId(userId) },
+      { $set: { paypalSubscriptionId: subscription.id, updatedAt: new Date() } }
+    );
+
+    return NextResponse.json({ url: approveLink.href });
   } catch (error) {
     console.error("Billing checkout error:", error);
     return NextResponse.json({ error: "Errore interno" }, { status: 500 });

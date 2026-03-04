@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "stripe:setup": "ts-node --skip-project scripts/stripe-setup.ts"
+    "paypal:setup": "ts-node --skip-project scripts/paypal-setup.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -35,7 +35,6 @@
     "react-hook-form": "^7.71.1",
     "react-leaflet": "^4.2.1",
     "recharts": "^3.7.0",
-    "stripe": "^20.4.0",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "zod": "^4.3.6",
