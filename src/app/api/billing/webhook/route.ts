@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { getDb } from "@/lib/mongodb";
 import type Stripe from "stripe";
 
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(
+    event = getStripe().webhooks.constructEvent(
       body,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET!
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
           : session.subscription?.id;
       if (!subId) break;
 
-      const subscription = await stripe.subscriptions.retrieve(subId);
+      const subscription = await getStripe().subscriptions.retrieve(subId);
 
       await db.collection("users").updateOne(
         { _id: new ObjectId(userId) },
