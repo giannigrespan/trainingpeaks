@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
     );
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: systemPrompt }] }],
       generationConfig: { maxOutputTokens: 2000, temperature: 0.7 },
@@ -220,7 +220,8 @@ export async function POST(req: NextRequest) {
       data: { name: parsed.name, description: parsed.description, steps },
     });
   } catch (error) {
-    console.error("Generate workout error:", error);
-    return NextResponse.json({ success: false, error: "Errore nella generazione" }, { status: 500 });
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("Generate workout error:", msg);
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }
