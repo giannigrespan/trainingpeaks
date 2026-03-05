@@ -190,7 +190,11 @@ export async function POST(req: NextRequest) {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: systemPrompt }] }],
-      generationConfig: { maxOutputTokens: 2000, temperature: 0.7 },
+      generationConfig: {
+        maxOutputTokens: 2000,
+        temperature: 0.7,
+        responseMimeType: "application/json",
+      },
     });
 
     const rawText = result.response.text().trim();
