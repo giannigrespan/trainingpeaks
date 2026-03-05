@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
     } catch {
       console.error("Gemini response non è JSON valido:", rawText);
       return NextResponse.json(
-        { success: false, error: "L'AI ha restituito un formato non valido. Riprova." },
+        { success: false, error: "L'AI ha restituito un formato non valido. Riprova.", debug: rawText },
         { status: 500 }
       );
     }
