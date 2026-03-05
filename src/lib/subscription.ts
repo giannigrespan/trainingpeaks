@@ -1,7 +1,11 @@
+// Set to false to re-enable paid subscription enforcement
+export const FREE_PLAN = true;
+
 export function isSubscribed(user: {
   subscriptionStatus?: string;
   trialEndsAt?: Date | string | null;
 }): boolean {
+  if (FREE_PLAN) return true;
   if (user.subscriptionStatus === "active") return true;
   if (
     user.subscriptionStatus === "trialing" &&

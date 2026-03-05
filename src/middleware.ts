@@ -1,5 +1,6 @@
 import { getToken } from "next-auth/jwt";
 import { NextRequest, NextResponse } from "next/server";
+import { FREE_PLAN } from "@/lib/subscription";
 
 const PUBLIC_PREFIXES = [
   "/login",
@@ -30,6 +31,7 @@ export async function middleware(req: NextRequest) {
     : null;
 
   const isActive =
+    FREE_PLAN ||
     status === "active" ||
     (status === "trialing" && trialEndsAt != null && trialEndsAt > new Date());
 
