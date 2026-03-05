@@ -3,16 +3,17 @@
 import { Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trialDaysLeft } from "@/lib/subscription";
 
 function SubscribeContent() {
-  const { data: session } = useSession();
+  const { data: session, update: updateSession } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const canceled = searchParams.get("checkout") === "canceled";
 
   const [loading, setLoading] = useState(false);
+  const [verifying, setVerifying] = useState(true);
 
   const user = session?.user as
     | { subscriptionStatus?: string; trialEndsAt?: string | null }
@@ -22,6 +23,25 @@ function SubscribeContent() {
   const trialExpired =
     user?.subscriptionStatus === "trialing" && daysLeft === 0;
   const pastDue = user?.subscriptionStatus === "past_due";
+
+  // Controlla se l'utente ha già un abbonamento attivo su PayPal
+  // (es. pagato ma JWT non aggiornato)
+  useEffect(() => {
+    if (canceled) {
+      setVerifying(false);
+      return;
+    }
+    fetch("/api/billing/verify-subscription", { method: "POST" })
+      .then((r) => r.json())
+      .then(async (data) => {
+        if (data.status === "ACTIVE") {
+          await updateSession();
+          router.replace("/dashboard");
+        }
+      })
+      .catch(() => {})
+      .finally(() => setVerifying(false));
+  }, [canceled, router, updateSession]);
 
   async function handleSubscribe() {
     setLoading(true);
@@ -36,6 +56,13 @@ function SubscribeContent() {
     }
   }
 
+  if (verifying) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-900">
+        <p className="text-sm text-zinc-400">Verifica abbonamento…</p>
+      </div>
+    );
+  }
   return (
     <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-900 px-4">
       <div className="w-full max-w-md">
