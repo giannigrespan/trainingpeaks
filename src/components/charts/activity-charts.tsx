@@ -43,6 +43,16 @@ function formatTime(seconds: number) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+function getYAxisId(key: SeriesKey, powerActive: boolean, activeSeries: SeriesKey[]): string {
+  if (key === "power") return "left";
+  if (!powerActive) {
+    // No power: first active non-power series goes to left, rest to right
+    const nonPowerActive = activeSeries.filter((k) => k !== "power");
+    if (nonPowerActive[0] === key) return "left";
+  }
+  return `right-${key}`;
+}
+
 export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: number[] }) {
   const [active, setActive] = useState<Set<SeriesKey>>(new Set<SeriesKey>(["power"]));
   const lapMarkers = laps ?? [];
@@ -64,30 +74,6 @@ export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: 
     return data;
   }, [streams, step]);
 
-  const maxValues = useMemo(() => {
-    const result = {} as Record<SeriesKey, number>;
-    for (const { key } of SERIES_CONFIG) {
-      const vals = (streams[key as keyof StreamData] as number[]).filter((v) => v > 0);
-      result[key] = vals.length > 0 ? Math.max(...vals) : 1;
-    }
-    return result;
-  }, [streams]);
-
-  const multiMode = active.size > 1;
-
-  const chartData = useMemo<ChartPoint[]>(() => {
-    if (!multiMode) return rawData;
-    return rawData.map((d) => {
-      const norm = { time: d.time } as ChartPoint;
-      for (const { key } of SERIES_CONFIG) {
-        norm[key] = maxValues[key] > 0
-          ? Math.round((d[key] / maxValues[key]) * 1000) / 10
-          : 0;
-      }
-      return norm;
-    });
-  }, [rawData, multiMode, maxValues]);
-
   const toggle = (key: SeriesKey) => {
     setActive((prev) => {
       const next = new Set(prev);
@@ -100,6 +86,20 @@ export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: 
     });
   };
 
+  const activeSeries = SERIES_CONFIG.filter((s) => active.has(s.key));
+  const powerActive = active.has("power");
+
+  // Series that go on the right axis
+  const rightAxisSeries = activeSeries.filter((s) => {
+    if (s.key === "power") return false;
+    if (!powerActive) {
+      // First non-power series goes to left
+      const nonPowerActive = activeSeries.filter((a) => a.key !== "power");
+      if (nonPowerActive[0]?.key === s.key) return false;
+    }
+    return true;
+  });
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const renderTooltip = ({ active: on, payload, label }: any) => {
     if (!on || !payload?.length) return null;
@@ -110,12 +110,9 @@ export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: 
         {payload.map((entry: any) => {
           const cfg = SERIES_CONFIG.find((s) => s.key === entry.dataKey);
           if (!cfg) return null;
-          const actual = multiMode
-            ? Math.round((entry.value * maxValues[entry.dataKey as SeriesKey]) / 100 * 10) / 10
-            : entry.value;
           return (
             <div key={entry.dataKey} style={{ color: cfg.color }}>
-              {cfg.label}: {actual} {cfg.unit}
+              {cfg.label}: {entry.value} {cfg.unit}
             </div>
           );
         })}
@@ -123,8 +120,10 @@ export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: 
     );
   };
 
-  const singleSeries = SERIES_CONFIG.find((s) => active.has(s.key));
-  const yAxisUnit = multiMode ? "%" : (singleSeries?.unit ?? "");
+  // Left axis config: power if active, else first non-power series
+  const leftAxisSeries = powerActive
+    ? SERIES_CONFIG.find((s) => s.key === "power")!
+    : activeSeries[0];
 
   return (
     <div className="w-full space-y-3">
@@ -150,28 +149,51 @@ export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: 
       </div>
 
       <ResponsiveContainer width="100%" height={250}>
-        <LineChart data={chartData}>
+        <LineChart data={rawData}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
           <XAxis dataKey="time" tick={{ fontSize: 11 }} tickFormatter={formatTime} />
+
+          {/* Left axis: always power (or first series if power not active) */}
           <YAxis
+            yAxisId="left"
+            unit={leftAxisSeries?.unit ?? ""}
             tick={{ fontSize: 11 }}
-            unit={yAxisUnit}
-            domain={multiMode ? [0, 100] : ["auto", "auto"]}
+            domain={["auto", "auto"]}
+            width={45}
           />
+
+          {/* One right axis per non-power active series */}
+          {rightAxisSeries.map(({ key, unit }) => (
+            <YAxis
+              key={key}
+              yAxisId={`right-${key}`}
+              orientation="right"
+              unit={unit}
+              tick={{ fontSize: 11 }}
+              domain={["auto", "auto"]}
+              width={40}
+            />
+          ))}
+
           <Tooltip content={renderTooltip} />
-          {SERIES_CONFIG.filter((s) => active.has(s.key)).map(({ key, color }) => (
+
+          {activeSeries.map(({ key, color }) => (
             <Line
               key={key}
+              yAxisId={getYAxisId(key, powerActive, activeSeries.map((s) => s.key))}
               type="monotone"
               dataKey={key}
               stroke={color}
               strokeWidth={1.5}
               dot={false}
+              isAnimationActive={false}
             />
           ))}
+
           {lapMarkers.map((x, i) => (
             <ReferenceLine
               key={i}
+              yAxisId="left"
               x={x}
               stroke="#94A3B8"
               strokeDasharray="4 2"
