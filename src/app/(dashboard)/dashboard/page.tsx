@@ -187,6 +187,7 @@ function DashboardContent() {
   const [ftp, setFtp] = useState(0);
   const [loading, setLoading] = useState(true);
   const [powerCurve, setPowerCurve] = useState<PowerCurvePoint[]>([]);
+  const [wahooSynced, setWahooSynced] = useState(0);
 
   // Verifica e attiva l'abbonamento dopo il ritorno da PayPal
   useEffect(() => {
@@ -212,7 +213,21 @@ function DashboardContent() {
         }
         if (pcRes.success) setPowerCurve(pcRes.data);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        // Auto-sync Wahoo in background — silenzioso, non blocca la UI
+        fetch("/api/integrations/wahoo/sync", { method: "POST" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (data?.imported > 0) {
+              setWahooSynced(data.imported);
+              fetch("/api/activities?limit=10")
+                .then((r) => r.json())
+                .then((res) => { if (res.success) setActivities(res.data); });
+            }
+          })
+          .catch(() => {});
+      });
   }, []);
 
   async function handleDelete(e: React.MouseEvent, id: string) {
@@ -254,6 +269,21 @@ function DashboardContent() {
       {checkoutSuccess && (
         <div className="rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-700 dark:text-green-300">
           Abbonamento attivato! Benvenuto in CycloPower Pro.
+        </div>
+      )}
+      {wahooSynced > 0 && (
+        <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-4 py-2.5 text-sm text-emerald-700 dark:text-emerald-300 flex items-center justify-between">
+          <span>
+            {wahooSynced === 1
+              ? "1 nuova attività importata da Wahoo"
+              : `${wahooSynced} nuove attività importate da Wahoo`}
+          </span>
+          <button
+            onClick={() => setWahooSynced(0)}
+            className="text-emerald-500 hover:text-emerald-700 ml-4 text-xs font-bold"
+          >
+            ✕
+          </button>
         </div>
       )}
       {/* Page header */}
