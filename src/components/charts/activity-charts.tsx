@@ -2,8 +2,9 @@
 
 import { useState, useMemo } from "react";
 import {
-  LineChart,
+  ComposedChart,
   Line,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -149,7 +150,7 @@ export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: 
       </div>
 
       <ResponsiveContainer width="100%" height={250}>
-        <LineChart data={rawData}>
+        <ComposedChart data={rawData}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
           <XAxis dataKey="time" tick={{ fontSize: 11 }} tickFormatter={formatTime} />
 
@@ -177,18 +178,32 @@ export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: 
 
           <Tooltip content={renderTooltip} />
 
-          {activeSeries.map(({ key, color }) => (
-            <Line
-              key={key}
-              yAxisId={getYAxisId(key, powerActive, activeSeries.map((s) => s.key))}
-              type="monotone"
-              dataKey={key}
-              stroke={color}
-              strokeWidth={1.5}
-              dot={false}
-              isAnimationActive={false}
-            />
-          ))}
+          {activeSeries.map(({ key, color }) =>
+            key === "altitude" ? (
+              <Area
+                key={key}
+                yAxisId={getYAxisId(key, powerActive, activeSeries.map((s) => s.key))}
+                type="monotone"
+                dataKey={key}
+                stroke={color}
+                strokeWidth={1.5}
+                fill="rgba(107,114,128,0.15)"
+                dot={false}
+                isAnimationActive={false}
+              />
+            ) : (
+              <Line
+                key={key}
+                yAxisId={getYAxisId(key, powerActive, activeSeries.map((s) => s.key))}
+                type="monotone"
+                dataKey={key}
+                stroke={color}
+                strokeWidth={1.5}
+                dot={false}
+                isAnimationActive={false}
+              />
+            )
+          )}
 
           {lapMarkers.map((x, i) => (
             <ReferenceLine
@@ -200,7 +215,7 @@ export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: 
               label={{ value: `G${i + 1}`, position: "top", fontSize: 10, fill: "#94A3B8" }}
             />
           ))}
-        </LineChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
