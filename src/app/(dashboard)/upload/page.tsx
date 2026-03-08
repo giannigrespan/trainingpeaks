@@ -109,7 +109,7 @@ export default function UploadPage() {
                     : "Trascina un file .FIT o clicca per selezionare"}
                 </p>
                 <p className="text-sm text-gray-400">
-                  Supportato: .FIT (Garmin, Wahoo, SRM, Stages)
+                  Supportato: .FIT (Garmin, Wahoo, Bryton, SRM, Stages e altri)
                 </p>
               </div>
             )}
@@ -192,6 +192,33 @@ export default function UploadPage() {
               <strong>PMC</strong> - Grafico forma/fatica/fitness (CTL/ATL/TSB)
             </li>
           </ul>
+        </CardContent>
+      </Card>
+
+      {/* Bryton guide */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Come esportare da Bryton</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm text-gray-600">
+          <div>
+            <p className="font-semibold text-gray-800 mb-1">Via USB (metodo diretto)</p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>Connetti il Bryton al PC tramite cavo USB</li>
+              <li>Apri la cartella <code className="bg-gray-100 px-1 rounded text-xs">RIDE</code> sul dispositivo</li>
+              <li>Copia il file <code className="bg-gray-100 px-1 rounded text-xs">.fit</code> dell&apos;allenamento</li>
+              <li>Trascinalo nell&apos;area qui sopra</li>
+            </ol>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-800 mb-1">Via app Bryton Active</p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>Apri l&apos;app <strong>Bryton Active</strong> sul telefono</li>
+              <li>Seleziona l&apos;attività dalla lista</li>
+              <li>Tocca <strong>···</strong> → <strong>Condividi</strong> → <strong>Esporta file FIT</strong></li>
+              <li>Salva il file e caricalo qui</li>
+            </ol>
+          </div>
         </CardContent>
       </Card>
     </div>
