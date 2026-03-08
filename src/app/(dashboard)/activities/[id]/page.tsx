@@ -281,6 +281,18 @@ export default function ActivityDetailPage() {
         </Card>
       )}
 
+      {/* Best Powers */}
+      {activity.powerCurve && activity.powerCurve.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Migliori Prestazioni</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <BestPowersTable powerCurve={activity.powerCurve} />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Power Curve */}
       {activity.powerCurve && activity.powerCurve.length > 0 && (
         <Card>
@@ -306,6 +318,38 @@ export default function ActivityDetailPage() {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+const BEST_POWER_LABELS: { label: string; seconds: number }[] = [
+  { label: "1 min",  seconds: 60 },
+  { label: "3 min",  seconds: 180 },
+  { label: "5 min",  seconds: 300 },
+  { label: "10 min", seconds: 600 },
+  { label: "15 min", seconds: 900 },
+  { label: "20 min", seconds: 1200 },
+  { label: "60 min", seconds: 3600 },
+];
+
+function BestPowersTable({ powerCurve }: { powerCurve: { duration: number; power: number }[] }) {
+  const map = new Map(powerCurve.map((p) => [p.duration, p.power]));
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+      {BEST_POWER_LABELS.map(({ label, seconds }) => {
+        const w = map.get(seconds);
+        return (
+          <div
+            key={seconds}
+            className="flex flex-col items-center rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 p-3 text-center"
+          >
+            <span className="text-xs text-zinc-400 font-medium mb-1">{label}</span>
+            <span className="text-lg font-bold tabular-nums text-zinc-900 dark:text-zinc-100">
+              {w != null ? `${w}W` : "—"}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
