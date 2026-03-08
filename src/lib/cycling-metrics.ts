@@ -59,7 +59,7 @@ export function calculateTSS(
  * Calculate Power Curve - best average power for given durations
  */
 export function calculatePowerCurve(powerData: number[]): PowerCurvePoint[] {
-  const durations = [1, 5, 10, 30, 60, 300, 600, 1200, 3600];
+  const durations = [1, 5, 10, 30, 60, 180, 300, 600, 900, 1200, 3600];
   const curve: PowerCurvePoint[] = [];
 
   for (const duration of durations) {

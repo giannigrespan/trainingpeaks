@@ -187,6 +187,7 @@ function DashboardContent() {
   const [ftp, setFtp] = useState(0);
   const [loading, setLoading] = useState(true);
   const [powerCurve, setPowerCurve] = useState<PowerCurvePoint[]>([]);
+  const [bestPowersYtd, setBestPowersYtd] = useState<PowerCurvePoint[]>([]);
   const [wahooSynced, setWahooSynced] = useState(0);
 
   // Verifica e attiva l'abbonamento dopo il ritorno da PayPal
@@ -203,8 +204,9 @@ function DashboardContent() {
       fetch("/api/analytics/pmc?days=90").then((r) => r.json()),
       fetch("/api/user/profile").then((r) => r.json()),
       fetch("/api/analytics/power-curve").then((r) => r.json()),
+      fetch("/api/analytics/power-curve?scope=ytd").then((r) => r.json()),
     ])
-      .then(([actRes, pmcRes, profileRes, pcRes]) => {
+      .then(([actRes, pmcRes, profileRes, pcRes, ytdRes]) => {
         if (actRes.success) setActivities(actRes.data);
         if (pmcRes.success) setPmcData(pmcRes.data);
         if (profileRes.success && profileRes.data) {
@@ -212,6 +214,7 @@ function DashboardContent() {
           setFtp(profileRes.data.ftp ?? 0);
         }
         if (pcRes.success) setPowerCurve(pcRes.data);
+        if (ytdRes.success) setBestPowersYtd(ytdRes.data);
       })
       .finally(() => {
         setLoading(false);
@@ -524,6 +527,45 @@ function DashboardContent() {
           )}
         </div>
       </div>
+
+      {/* Best Powers YTD */}
+      {bestPowersYtd.length > 0 && (
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-6">
+          <div className="mb-4">
+            <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-100">
+              Migliori Potenze — Anno {new Date().getFullYear()}
+            </h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Best power su durate standard, calcolato su tutte le attività dell&apos;anno
+            </p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+            {[
+              { label: "1 min",  seconds: 60 },
+              { label: "3 min",  seconds: 180 },
+              { label: "5 min",  seconds: 300 },
+              { label: "10 min", seconds: 600 },
+              { label: "15 min", seconds: 900 },
+              { label: "20 min", seconds: 1200 },
+              { label: "60 min", seconds: 3600 },
+            ].map(({ label, seconds }) => {
+              const point = bestPowersYtd.find((p) => p.duration === seconds);
+              const w = point?.recent ?? 0;
+              return (
+                <div
+                  key={seconds}
+                  className="flex flex-col items-center rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 p-3 text-center"
+                >
+                  <span className="text-xs text-zinc-400 font-medium mb-1">{label}</span>
+                  <span className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100">
+                    {w > 0 ? `${w}W` : "—"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Power Curve Evolution */}
       {powerCurve.length > 0 && (
