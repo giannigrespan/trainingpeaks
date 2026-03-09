@@ -14,6 +14,13 @@ export interface ImportOptions {
   wahooWorkoutId?: string;
 }
 
+/** Keep 1 sample every STREAM_STEP seconds to reduce storage ~80% */
+const STREAM_STEP = 5;
+
+function downsample<T>(arr: T[]): T[] {
+  return arr.filter((_, i) => i % STREAM_STEP === 0);
+}
+
 export async function importFitBuffer(buffer: Buffer, options: ImportOptions) {
   const parsedData = parseFitFile(buffer);
 
@@ -86,16 +93,20 @@ export async function importFitBuffer(buffer: Buffer, options: ImportOptions) {
 
   await db.collection("activity_streams").insertOne({
     activityId: activityResult.insertedId.toString(),
-    timestamp: parsedData.timestamp,
-    power: parsedData.power,
-    heartRate: parsedData.heartRate,
-    cadence: parsedData.cadence,
-    speed: parsedData.speed,
-    altitude: parsedData.altitude,
-    distance: parsedData.distance,
-    lat: parsedData.lat,
-    lng: parsedData.lng,
-    laps: lapElapsed,
+    // activityDate drives the TTL index (auto-delete after 18 months)
+    activityDate: parsedData.startTime || new Date(),
+    // samplingRate tells the chart how many seconds each array index represents
+    samplingRate: STREAM_STEP,
+    timestamp: downsample(parsedData.timestamp),
+    power:     downsample(parsedData.power),
+    heartRate: downsample(parsedData.heartRate),
+    cadence:   downsample(parsedData.cadence),
+    speed:     downsample(parsedData.speed),
+    altitude:  downsample(parsedData.altitude),
+    distance:  downsample(parsedData.distance),
+    lat:       downsample(parsedData.lat),
+    lng:       downsample(parsedData.lng),
+    laps: lapElapsed, // elapsed-seconds markers, not a 1Hz series — no downsample
   });
 
   return {
