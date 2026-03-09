@@ -8,9 +8,10 @@
  * - 2-byte CRC
  */
 
-interface ParsedFitData {
+export interface ParsedFitData {
   startTime: Date;
   duration: number;
+  movingTime: number; // seconds with speed > 0 (excludes pauses)
   totalDistance: number;
   elevationGain: number;
   calories: number;
@@ -50,6 +51,7 @@ const RECORD_FIELD_POWER = 7;
 
 // Session fields
 const SESSION_FIELD_TOTAL_ELAPSED_TIME = 7;
+const SESSION_FIELD_TOTAL_TIMER_TIME = 8; // active/moving time, excludes pauses
 const SESSION_FIELD_TOTAL_DISTANCE = 9;
 const SESSION_FIELD_TOTAL_CALORIES = 11;
 const SESSION_FIELD_TOTAL_ASCENT = 22;
@@ -73,6 +75,7 @@ export function parseFitFile(buffer: Buffer): ParsedFitData {
   const result: ParsedFitData = {
     startTime: new Date(),
     duration: 0,
+    movingTime: 0,
     totalDistance: 0,
     elevationGain: 0,
     calories: 0,
@@ -221,6 +224,15 @@ export function parseFitFile(buffer: Buffer): ParsedFitData {
       result.timestamp[result.timestamp.length - 1] - result.timestamp[0];
   }
 
+  // Derive movingTime from speed stream if not provided by session message
+  if (result.movingTime === 0) {
+    result.movingTime = result.speed.filter(s => s > 0).length;
+  }
+  // Final fallback: use elapsed duration
+  if (result.movingTime === 0) {
+    result.movingTime = result.duration;
+  }
+
   // Set total distance from distance stream if not from session
   if (result.totalDistance === 0 && result.distance.length > 0) {
     result.totalDistance = result.distance[result.distance.length - 1];
@@ -302,6 +314,11 @@ function readDataMessage(
           // 0xFFFFFFFF is the "invalid" sentinel in FIT protocol — ignore it.
           if ((value as number) !== 0xffffffff) {
             result.duration = Math.round((value as number) / 1000);
+          }
+          break;
+        case SESSION_FIELD_TOTAL_TIMER_TIME:
+          if ((value as number) !== 0xffffffff) {
+            result.movingTime = Math.round((value as number) / 1000);
           }
           break;
         case SESSION_FIELD_TOTAL_DISTANCE:

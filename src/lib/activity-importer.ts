@@ -33,7 +33,8 @@ export async function importFitBuffer(buffer: Buffer, options: ImportOptions) {
   const powerData = parsedData.power.filter((p: number) => p > 0);
   const np = calculateNormalizedPower(powerData);
   const intensityFactor = calculateIntensityFactor(np, ftp);
-  const rawTss = calculateTSS(parsedData.duration, np, intensityFactor, ftp);
+  // Use movingTime for TSS so pauses don't inflate training load
+  const rawTss = calculateTSS(parsedData.movingTime, np, intensityFactor, ftp);
   // Cap at 500 TSS (a 10h ultra-endurance event is ~400-450) to guard against
   // corrupt FIT duration values (e.g. 0xFFFFFFFF sentinel in session message)
   const tss = Math.min(rawTss, 500);
@@ -50,6 +51,7 @@ export async function importFitBuffer(buffer: Buffer, options: ImportOptions) {
     activityDate: parsedData.startTime || new Date(),
     sport: "cycling",
     duration: parsedData.duration,
+    movingTime: parsedData.movingTime,
     distance: parsedData.totalDistance,
     elevationGain: parsedData.elevationGain,
     avgPower: Math.round(
@@ -59,18 +61,22 @@ export async function importFitBuffer(buffer: Buffer, options: ImportOptions) {
     normalizedPower: np,
     intensityFactor,
     tss,
-    avgHR: Math.round(
-      parsedData.heartRate.reduce((s: number, v: number) => s + v, 0) /
-        (parsedData.heartRate.length || 1)
-    ),
+    avgHR: (() => {
+      const movingHR = parsedData.heartRate.filter((_: number, i: number) => parsedData.speed[i] > 0 && parsedData.heartRate[i] > 0);
+      return movingHR.length > 0
+        ? Math.round(movingHR.reduce((s: number, v: number) => s + v, 0) / movingHR.length)
+        : Math.round(parsedData.heartRate.filter((v: number) => v > 0).reduce((s: number, v: number) => s + v, 0) / (parsedData.heartRate.filter((v: number) => v > 0).length || 1));
+    })(),
     maxHR: parsedData.heartRate.reduce((max: number, v: number) => (v > max ? v : max), 0),
-    avgCadence: Math.round(
-      parsedData.cadence.reduce((s: number, v: number) => s + v, 0) /
-        (parsedData.cadence.length || 1)
-    ),
+    avgCadence: (() => {
+      const movingCadence = parsedData.cadence.filter((_: number, i: number) => parsedData.speed[i] > 0 && parsedData.cadence[i] > 0);
+      return movingCadence.length > 0
+        ? Math.round(movingCadence.reduce((s: number, v: number) => s + v, 0) / movingCadence.length)
+        : Math.round(parsedData.cadence.filter((v: number) => v > 0).reduce((s: number, v: number) => s + v, 0) / (parsedData.cadence.filter((v: number) => v > 0).length || 1));
+    })(),
     avgSpeed:
-      parsedData.totalDistance > 0 && parsedData.duration > 0
-        ? parsedData.totalDistance / parsedData.duration
+      parsedData.totalDistance > 0 && parsedData.movingTime > 0
+        ? parsedData.totalDistance / parsedData.movingTime
         : 0,
     maxSpeed: parsedData.speed.reduce((max: number, v: number) => (v > max ? v : max), 0),
     calories: parsedData.calories || 0,
