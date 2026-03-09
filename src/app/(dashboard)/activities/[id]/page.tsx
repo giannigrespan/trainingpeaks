@@ -289,7 +289,7 @@ export default function ActivityDetailPage() {
             <CardTitle className="text-lg">Migliori Prestazioni</CardTitle>
           </CardHeader>
           <CardContent>
-            <BestPowersTable powerCurve={activity.powerCurve} />
+            <BestPowersTable powerCurve={activity.powerCurve} streams={streams ?? undefined} />
           </CardContent>
         </Card>
       )}
@@ -333,12 +333,39 @@ const BEST_POWER_LABELS: { label: string; seconds: number }[] = [
   { label: "60 min", seconds: 3600 },
 ];
 
-function BestPowersTable({ powerCurve }: { powerCurve: { duration: number; power: number }[] }) {
+/** Sliding-window best average power for targetSec seconds from a raw power array. */
+function bestPowerFromStream(
+  power: number[],
+  targetSec: number,
+  samplingRate: number
+): number | null {
+  const windowSize = Math.round(targetSec / samplingRate);
+  if (windowSize < 1 || windowSize > power.length) return null;
+  let sum = 0;
+  for (let i = 0; i < windowSize; i++) sum += power[i];
+  let maxAvg = sum;
+  for (let i = windowSize; i < power.length; i++) {
+    sum += power[i] - power[i - windowSize];
+    if (sum > maxAvg) maxAvg = sum;
+  }
+  return Math.round(maxAvg / windowSize);
+}
+
+function BestPowersTable({
+  powerCurve,
+  streams,
+}: {
+  powerCurve: { duration: number; power: number }[];
+  streams?: { power: number[]; samplingRate?: number };
+}) {
   const map = new Map(powerCurve.map((p) => [p.duration, p.power]));
+  const samplingRate = streams?.samplingRate ?? 1;
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
       {BEST_POWER_LABELS.map(({ label, seconds }) => {
-        const w = map.get(seconds);
+        const w =
+          map.get(seconds) ??
+          (streams?.power ? bestPowerFromStream(streams.power, seconds, samplingRate) : null);
         return (
           <div
             key={seconds}
