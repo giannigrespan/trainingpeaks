@@ -24,6 +24,8 @@ interface StreamData {
   speed: number[];
   altitude: number[];
   laps?: number[];
+  /** Seconds represented by each array index (default 1). Set to 5 for downsampled streams. */
+  samplingRate?: number;
 }
 
 const SERIES_CONFIG = [
@@ -57,6 +59,7 @@ function getYAxisId(key: SeriesKey, powerActive: boolean, activeSeries: SeriesKe
 export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: number[] }) {
   const [active, setActive] = useState<Set<SeriesKey>>(new Set<SeriesKey>(["power"]));
   const lapMarkers = laps ?? [];
+  const samplingRate = streams.samplingRate ?? 1;
 
   const step = Math.max(1, Math.floor((streams.power.length || 1) / 500));
 
@@ -64,7 +67,8 @@ export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: 
     const data: ChartPoint[] = [];
     for (let i = 0; i < streams.power.length; i += step) {
       data.push({
-        time: i,
+        // Convert array index to actual elapsed seconds
+        time: i * samplingRate,
         power:     streams.power[i]     || 0,
         heartRate: streams.heartRate[i] || 0,
         cadence:   streams.cadence[i]   || 0,
@@ -73,7 +77,7 @@ export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: 
       });
     }
     return data;
-  }, [streams, step]);
+  }, [streams, step, samplingRate]);
 
   const toggle = (key: SeriesKey) => {
     setActive((prev) => {

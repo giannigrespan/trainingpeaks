@@ -63,6 +63,7 @@ interface StreamData {
   laps?: number[];
   lat?: number[];
   lng?: number[];
+  samplingRate?: number;
 }
 
 interface ZoneData {

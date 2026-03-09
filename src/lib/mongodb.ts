@@ -1,4 +1,4 @@
-import { MongoClient } from "mongodb";
+import { MongoClient, type Db } from "mongodb";
 
 if (!process.env.MONGODB_URI) {
   throw new Error("Please add MONGODB_URI to .env.local");
@@ -28,7 +28,26 @@ if (process.env.NODE_ENV === "development") {
 
 export default clientPromise;
 
+// TTL index: auto-delete activity_streams older than 18 months (548 days)
+const STREAM_TTL_SECONDS = 548 * 24 * 3600;
+let ensureIndexesPromise: Promise<void> | null = null;
+
+async function ensureIndexes(db: Db): Promise<void> {
+  await db.collection("activity_streams").createIndex(
+    { activityDate: 1 },
+    { expireAfterSeconds: STREAM_TTL_SECONDS, background: true }
+  );
+}
+
 export async function getDb() {
   const client = await clientPromise;
-  return client.db("cyclopower");
+  const db = client.db("cyclopower");
+  if (!ensureIndexesPromise) {
+    ensureIndexesPromise = ensureIndexes(db).catch((e) => {
+      // Reset so it retries on the next call
+      ensureIndexesPromise = null;
+      console.error("[mongodb] ensureIndexes failed:", e);
+    });
+  }
+  return db;
 }
