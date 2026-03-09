@@ -68,10 +68,13 @@ export async function POST() {
 
     if (newPoints.length === 0) { skipped++; continue; }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updatedCurve = [
+      ...(act.powerCurve as { duration: number; power: number }[]),
+      ...newPoints,
+    ];
     await db.collection("activities").updateOne(
       { _id: act._id },
-      { $push: { powerCurve: { $each: newPoints } } } as any
+      { $set: { powerCurve: updatedCurve } }
     );
     updated++;
   }
