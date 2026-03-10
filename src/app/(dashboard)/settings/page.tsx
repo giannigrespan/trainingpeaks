@@ -215,13 +215,14 @@ export default function SettingsPage() {
     );
   }
 
-  const zoneNames = ["Recovery", "Endurance", "Tempo", "Threshold", "VO2max"];
+  const zoneNames = ["Recovery", "Endurance", "Tempo", "Threshold", "VO2max", "Anaerobic"];
   const zoneColors = [
     "bg-gray-200",
     "bg-blue-200",
     "bg-green-200",
     "bg-yellow-200",
     "bg-red-200",
+    "bg-purple-200",
   ];
 
   return (
@@ -315,7 +316,7 @@ export default function SettingsPage() {
               Calcolate automaticamente dal tuo FTP di {ftp}W
             </p>
             <div className="space-y-2">
-              {(["z1", "z2", "z3", "z4", "z5"] as const).map((zone, i) => (
+              {(["z1", "z2", "z3", "z4", "z5", "z6"] as const).map((zone, i) => (
                 <div
                   key={zone}
                   className="flex items-center gap-3 rounded-lg p-2"
@@ -325,8 +326,8 @@ export default function SettingsPage() {
                     Z{i + 1} {zoneNames[i]}
                   </span>
                   <span className="text-sm tabular-nums text-gray-600">
-                    {profile.powerZones[zone].min} -{" "}
-                    {profile.powerZones[zone].max}W
+                    {profile.powerZones[zone]?.min ?? "-"} -{" "}
+                    {profile.powerZones[zone]?.max ?? "-"}W
                   </span>
                 </div>
               ))}
