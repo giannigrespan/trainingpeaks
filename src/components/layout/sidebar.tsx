@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LayoutDashboard, Upload, Settings, LogOut, Zap, CalendarDays, BookOpen, Dumbbell } from "lucide-react";
+import { LayoutDashboard, Upload, Settings, LogOut, Zap, CalendarDays, BookOpen, Dumbbell, Map } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/calendar", label: "Calendario", icon: CalendarDays },
   { href: "/workouts", label: "Workout", icon: Dumbbell },
+  { href: "/analytics/heatmap", label: "Strade Percorse", icon: Map },
   { href: "/upload", label: "Carica attività", icon: Upload },
   { href: "/learn", label: "Guida", icon: BookOpen },
   { href: "/settings", label: "Impostazioni", icon: Settings },
