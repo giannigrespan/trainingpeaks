@@ -68,10 +68,10 @@ export async function GET() {
 
   // Sort by frequency, return top 2000 cells
   const cells: HeatmapCell[] = [];
-  for (const [key, actIds] of cellMap.entries()) {
+  Array.from(cellMap.entries()).forEach(([key, actIds]) => {
     const [latStr, lngStr] = key.split("_");
     cells.push({ lat: parseFloat(latStr), lng: parseFloat(lngStr), count: actIds.size });
-  }
+  });
   cells.sort((a, b) => b.count - a.count);
   const top = cells.slice(0, 2000);
   const maxCount = top[0]?.count ?? 1;
