@@ -66,7 +66,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
       const fitBuffer = exportToFitCourse(
         stream.lat, stream.lng, stream.altitude ?? [], stream.distance ?? [], stream.timestamp ?? [], workout.name
       );
-      return new NextResponse(fitBuffer, {
+      return new NextResponse(new Uint8Array(fitBuffer), {
         headers: {
           "Content-Type": "application/octet-stream",
           "Content-Disposition": `attachment; filename="${safeName}.fit"`,
