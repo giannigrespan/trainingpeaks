@@ -161,7 +161,7 @@ export function generatePowerZones(ftp: number) {
     z3: { min: Math.round(ftp * 0.75), max: Math.round(ftp * 0.90) },
     z4: { min: Math.round(ftp * 0.90), max: Math.round(ftp * 1.05) },
     z5: { min: Math.round(ftp * 1.05), max: Math.round(ftp * 1.20) },
-    z6: { min: Math.round(ftp * 1.20), max: Math.round(ftp * 2.00) },
+    z6: { min: Math.round(ftp * 1.20), max: null },
   };
 }
 

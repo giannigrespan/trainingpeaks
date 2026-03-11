@@ -62,7 +62,7 @@ interface PowerZones {
   z3: { min: number; max: number };
   z4: { min: number; max: number };
   z5: { min: number; max: number };
-  z6: { min: number; max: number };
+  z6: { min: number; max: number | null };
 }
 
 // ─── MetricCard ───────────────────────────────────────────────────────────────
@@ -501,13 +501,13 @@ function DashboardContent() {
               {ZONE_KEYS.map((zk, i) => {
                 const zone = powerZones[zk];
                 if (!zone) return null;
-                const widthPct = Math.min(Math.round((zone.max / maxPower) * 100), 100);
+                const widthPct = zone.max == null ? 100 : Math.min(Math.round((zone.max / maxPower) * 100), 100);
                 return (
                   <div key={zk} className="space-y-1">
                     <div className="flex justify-between text-xs font-semibold">
                       <span className="text-zinc-700 dark:text-zinc-300">{ZONE_NAMES[i]}</span>
                       <span className="tabular-nums text-zinc-400">
-                        {zone.min}–{zone.max}W
+                        {zone.max == null ? `> ${zone.min}W` : `${zone.min}–${zone.max}W`}
                       </span>
                     </div>
                     <div className="h-2 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
