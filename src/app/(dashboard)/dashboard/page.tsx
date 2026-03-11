@@ -500,6 +500,7 @@ function DashboardContent() {
             <div className="space-y-3">
               {ZONE_KEYS.map((zk, i) => {
                 const zone = powerZones[zk];
+                if (!zone) return null;
                 const widthPct = Math.min(Math.round((zone.max / maxPower) * 100), 100);
                 return (
                   <div key={zk} className="space-y-1">
