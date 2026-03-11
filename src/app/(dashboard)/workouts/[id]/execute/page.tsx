@@ -61,22 +61,20 @@ export default function ExecuteWorkoutPage() {
   if (!workout) return <div className="py-12 text-center text-zinc-400 text-sm">Workout non trovato.</div>;
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <div className="flex items-center gap-3 mb-6">
+    <div className="mx-auto max-w-5xl px-4">
+      <div className="flex items-center gap-3 mb-4">
         <Button variant="ghost" size="sm" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{workout.name}</h1>
       </div>
 
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-6">
-        <WorkoutPlayer
-          workout={workout}
-          ftp={ftp}
-          onSave={handleSave}
-          onClose={() => router.push("/workouts")}
-        />
-      </div>
+      <WorkoutPlayer
+        workout={workout}
+        ftp={ftp}
+        onSave={handleSave}
+        onClose={() => router.push("/workouts")}
+      />
     </div>
   );
 }
