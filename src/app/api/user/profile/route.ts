@@ -30,6 +30,12 @@ export async function GET() {
       );
     }
 
+    // Backfill z6 for profiles that were saved before the 6-zone update
+    if (user.powerZones && !user.powerZones.z6 && user.ftp) {
+      const zones = generatePowerZones(user.ftp);
+      user.powerZones.z6 = zones.z6;
+    }
+
     return NextResponse.json({ success: true, data: user });
   } catch (error) {
     console.error("Get profile error:", error);
