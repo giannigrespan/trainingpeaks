@@ -62,6 +62,7 @@ interface PowerZones {
   z3: { min: number; max: number };
   z4: { min: number; max: number };
   z5: { min: number; max: number };
+  z6: { min: number; max: number };
 }
 
 // ─── MetricCard ───────────────────────────────────────────────────────────────
@@ -171,9 +172,10 @@ const ZONE_COLORS = [
   "bg-emerald-400",
   "bg-orange-400",
   "bg-rose-500",
+  "bg-purple-500",
 ];
-const ZONE_NAMES = ["Z1 Recovery", "Z2 Endurance", "Z3 Tempo", "Z4 Threshold", "Z5 VO2max"];
-const ZONE_KEYS = ["z1", "z2", "z3", "z4", "z5"] as const;
+const ZONE_NAMES = ["Z1 Recovery", "Z2 Endurance", "Z3 Tempo", "Z4 Threshold", "Z5 VO2max", "Z6 Anaerobic"];
+const ZONE_KEYS = ["z1", "z2", "z3", "z4", "z5", "z6"] as const;
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
