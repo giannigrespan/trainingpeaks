@@ -21,7 +21,7 @@ interface UserProfile {
     z3: { min: number; max: number };
     z4: { min: number; max: number };
     z5: { min: number; max: number };
-    z6: { min: number; max: number };
+    z6: { min: number; max: number | null };
   };
   hrZones: {
     z1: { min: number; max: number };
@@ -327,8 +327,9 @@ export default function SettingsPage() {
                     Z{i + 1} {zoneNames[i]}
                   </span>
                   <span className="text-sm tabular-nums text-gray-600">
-                    {profile.powerZones[zone]?.min ?? "-"} -{" "}
-                    {profile.powerZones[zone]?.max ?? "-"}W
+                    {profile.powerZones[zone]?.max == null
+                      ? `> ${profile.powerZones[zone]?.min ?? "-"}W`
+                      : `${profile.powerZones[zone]?.min ?? "-"} – ${profile.powerZones[zone]?.max}W`}
                   </span>
                 </div>
               ))}
