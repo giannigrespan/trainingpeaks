@@ -17,6 +17,7 @@ export interface PowerZones {
   z3: { min: number; max: number }; // Tempo
   z4: { min: number; max: number }; // Threshold
   z5: { min: number; max: number }; // VO2max
+  z6: { min: number; max: number }; // Anaerobic
 }
 
 export interface HRZones {

@@ -99,7 +99,8 @@ export function calculateZoneDistribution(
     { name: "Z2 Endurance", min: 0.55, max: 0.75 },
     { name: "Z3 Tempo", min: 0.75, max: 0.90 },
     { name: "Z4 Threshold", min: 0.90, max: 1.05 },
-    { name: "Z5 VO2max", min: 1.05, max: Infinity },
+    { name: "Z5 VO2max", min: 1.05, max: 1.20 },
+    { name: "Z6 Anaerobic", min: 1.20, max: Infinity },
   ];
 
   const counts = new Array(zones.length).fill(0);
@@ -159,7 +160,8 @@ export function generatePowerZones(ftp: number) {
     z2: { min: Math.round(ftp * 0.55), max: Math.round(ftp * 0.75) },
     z3: { min: Math.round(ftp * 0.75), max: Math.round(ftp * 0.90) },
     z4: { min: Math.round(ftp * 0.90), max: Math.round(ftp * 1.05) },
-    z5: { min: Math.round(ftp * 1.05), max: Math.round(ftp * 1.50) },
+    z5: { min: Math.round(ftp * 1.05), max: Math.round(ftp * 1.20) },
+    z6: { min: Math.round(ftp * 1.20), max: Math.round(ftp * 2.00) },
   };
 }
 
