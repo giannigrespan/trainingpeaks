@@ -128,8 +128,8 @@ export function calculatePowerCurve(
  * Based on Coggan power zones relative to FTP
  */
 export function calculateZoneDistribution(powerData: number[], ftp: number): number[] {
-  const zones = [0, 0, 0, 0, 0, 0, 0]; // Z1-Z7
-  const thresholds = [0.55, 0.75, 0.90, 1.05, 1.20, 1.50]; // Zone boundaries as % of FTP
+  const zones = [0, 0, 0, 0, 0, 0]; // Z1-Z6
+  const thresholds = [0.55, 0.75, 0.90, 1.05, 1.20]; // Zone boundaries as % of FTP
   const total = powerData.length;
 
   if (total === 0) return zones;
@@ -141,8 +141,7 @@ export function calculateZoneDistribution(powerData: number[], ftp: number): num
     else if (ratio <= thresholds[2]) zones[2]++;
     else if (ratio <= thresholds[3]) zones[3]++;
     else if (ratio <= thresholds[4]) zones[4]++;
-    else if (ratio <= thresholds[5]) zones[5]++;
-    else zones[6]++;
+    else zones[5]++;
   }
 
   // Convert to percentages
