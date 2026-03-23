@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     const wahooWorkoutId = String(workoutSummary.id);
-    const wahooUserId = String(workoutSummary.user_id);
+    const wahooUserId = String(body.user?.id);
 
     const db = await getDb();
     const user = await db
@@ -35,14 +35,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate using the per-user webhook secret stored at registration time.
-    // Wahoo sends it as "Authorization: Bearer <webhook_token>".
+    // Wahoo sends the token as "webhook_token" in the request body.
     // Fall back to the global WAHOO_WEBHOOK_TOKEN env var if no per-user secret
     // is stored (e.g. for legacy connections or when Wahoo didn't return one).
     const expectedToken: string | undefined =
       user.wahoo.webhookSecret ?? process.env.WAHOO_WEBHOOK_TOKEN;
     if (expectedToken) {
-      const authHeader = req.headers.get("authorization") ?? "";
-      const incomingToken = authHeader.replace(/^Bearer\s+/i, "").trim();
+      const incomingToken = body.webhook_token ?? "";
       if (incomingToken !== expectedToken) {
         console.warn("[Wahoo webhook] Invalid token – request rejected");
         return NextResponse.json({ success: false }, { status: 401 });
