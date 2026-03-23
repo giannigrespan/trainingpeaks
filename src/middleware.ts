@@ -8,6 +8,7 @@ const PUBLIC_PREFIXES = [
   "/subscribe",
   "/api/auth",
   "/api/billing/webhook",
+  "/api/integrations/wahoo/webhook",
   "/_next",
   "/favicon.ico",
 ];
