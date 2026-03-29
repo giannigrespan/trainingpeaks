@@ -303,8 +303,12 @@ export function LapAnalysisChart({
                 tickFormatter={formatter}
               />
               <Tooltip
-                formatter={(val: number) =>
-                  formatter ? [formatter(val), label] : [`${val}${unit}`, label]
+                formatter={(val: number | undefined) =>
+                  val == null
+                    ? ["—", label]
+                    : formatter
+                    ? [formatter(val), label]
+                    : [`${val}${unit}`, label]
                 }
               />
               <Bar dataKey={key as string} fill={color} radius={[4, 4, 0, 0]}>
