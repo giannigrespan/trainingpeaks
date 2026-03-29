@@ -225,6 +225,107 @@ export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: 
   );
 }
 
+// ─── Lap Analysis Chart ──────────────────────────────────────────────────────
+
+interface LapMetric {
+  lap: string;
+  avgPower: number;
+  avgCadence: number;
+  duration: number; // seconds
+}
+
+function avgNonZero(arr: number[]): number {
+  const vals = arr.filter((v) => v > 0);
+  if (!vals.length) return 0;
+  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+}
+
+function fmtDuration(s: number) {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
+export function LapAnalysisChart({
+  streams,
+  laps,
+}: {
+  streams: StreamData;
+  laps: number[];
+}) {
+  const lapData = useMemo<LapMetric[]>(() => {
+    const sr = streams.samplingRate ?? 1;
+    const totalSec = streams.power.length * sr;
+    const boundaries = [0, ...laps, totalSec];
+
+    return boundaries.slice(0, -1).map((start, i) => {
+      const end = boundaries[i + 1];
+      const si = Math.round(start / sr);
+      const ei = Math.min(Math.round(end / sr), streams.power.length);
+      return {
+        lap: `G${i + 1}`,
+        avgPower: avgNonZero(streams.power.slice(si, ei)),
+        avgCadence: avgNonZero(streams.cadence.slice(si, ei)),
+        duration: Math.round(end - start),
+      };
+    });
+  }, [streams, laps]);
+
+  if (!lapData.length) return null;
+
+  const miniCharts: {
+    label: string;
+    key: keyof LapMetric;
+    unit: string;
+    color: string;
+    formatter?: (v: number) => string;
+  }[] = [
+    { label: "Durata", key: "duration", unit: "", color: "#3B82F6", formatter: fmtDuration },
+    { label: "Potenza Media", key: "avgPower", unit: "W", color: "#8B5CF6" },
+    { label: "Cadenza Media", key: "avgCadence", unit: "rpm", color: "#F59E0B" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {miniCharts.map(({ label, key, unit, color, formatter }) => (
+        <div key={key}>
+          <p className="mb-1 text-xs font-medium text-zinc-500 uppercase tracking-wide">
+            {label}
+          </p>
+          <ResponsiveContainer width="100%" height={120}>
+            <BarChart data={lapData} barCategoryGap="30%">
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+              <XAxis dataKey="lap" tick={{ fontSize: 11 }} />
+              <YAxis
+                tick={{ fontSize: 11 }}
+                unit={unit}
+                width={key === "duration" ? 42 : 40}
+                tickFormatter={formatter}
+              />
+              <Tooltip
+                formatter={(val: number | undefined) =>
+                  val == null
+                    ? ["—", label]
+                    : formatter
+                    ? [formatter(val), label]
+                    : [`${val}${unit}`, label]
+                }
+              />
+              <Bar dataKey={key as string} fill={color} radius={[4, 4, 0, 0]}>
+                {lapData.map((_, idx) => (
+                  <Cell key={idx} fill={color} fillOpacity={0.85 - idx * 0.03} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Power Curve Chart ────────────────────────────────────────────────────────
+
 const POWER_CURVE_COLORS = [
   "#EF4444",
   "#F59E0B",
