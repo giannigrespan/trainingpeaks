@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   ActivityCharts,
+  LapAnalysisChart,
   PowerCurveChart,
 } from "@/components/charts/activity-charts";
 
@@ -253,6 +254,20 @@ export default function ActivityDetailPage() {
           </CardHeader>
           <CardContent>
             <ActivityCharts streams={streams} laps={streams.laps} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Lap Analysis */}
+      {streams?.laps && streams.laps.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">
+              Analisi Giri ({streams.laps.length + 1} giri)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LapAnalysisChart streams={streams} laps={streams.laps} />
           </CardContent>
         </Card>
       )}
