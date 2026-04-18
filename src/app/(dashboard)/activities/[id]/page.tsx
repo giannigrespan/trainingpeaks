@@ -133,10 +133,10 @@ export default function ActivityDetailPage() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="h-8 w-48 animate-pulse rounded bg-gray-200" />
+        <div className="h-8 w-48 animate-pulse rounded bg-gray-200 dark:bg-zinc-700" />
         <div className="grid gap-4 sm:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="h-24 animate-pulse rounded-lg bg-gray-100" />
+            <div key={i} className="h-24 animate-pulse rounded-lg bg-gray-100 dark:bg-zinc-800" />
           ))}
         </div>
       </div>
@@ -146,7 +146,7 @@ export default function ActivityDetailPage() {
   if (!activity) {
     return (
       <div className="py-12 text-center">
-        <p className="text-gray-500">Attività non trovata</p>
+        <p className="text-gray-500 dark:text-gray-400">Attività non trovata</p>
         <Link href="/dashboard" className="mt-2 text-sm text-blue-600 hover:underline">
           Torna alla dashboard
         </Link>
@@ -172,14 +172,14 @@ export default function ActivityDetailPage() {
       <div>
         <Link
           href="/dashboard"
-          className="mb-2 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+          className="mb-2 inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
         >
           <ArrowLeft className="h-4 w-4" /> Dashboard
         </Link>
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{activity.name}</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{activity.name}</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               {format(new Date(activity.activityDate), "EEEE d MMMM yyyy, HH:mm", {
                 locale: it,
               })}
@@ -192,7 +192,7 @@ export default function ActivityDetailPage() {
             <button
               onClick={handleDelete}
               disabled={deleting}
-              className="rounded-md p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+              className="rounded-md p-2 text-gray-400 dark:text-gray-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 disabled:opacity-50"
               title="Elimina attività"
             >
               <Trash2 className="h-4 w-4" />
@@ -304,20 +304,20 @@ export default function ActivityDetailPage() {
             {zones.map((z, i) => (
               <div key={z.zone} className="flex items-center gap-3">
                 <div className="w-44 shrink-0">
-                  <div className="text-xs text-gray-600">{z.zone}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-300">{z.zone}</div>
                   {z.minWatts != null && (
-                    <div className="text-[10px] text-zinc-400 tabular-nums">
+                    <div className="text-[10px] text-zinc-400 dark:text-zinc-500 tabular-nums">
                       {z.minWatts}–{z.maxWatts != null ? `${z.maxWatts} W` : "∞"}
                     </div>
                   )}
                 </div>
-                <div className="flex-1 h-4 rounded-full bg-zinc-100 overflow-hidden">
+                <div className="flex-1 h-4 rounded-full bg-zinc-100 dark:bg-zinc-700 overflow-hidden">
                   <div
                     className={`h-full rounded-full ${ZONE_COLORS[i] ?? "bg-zinc-400"}`}
                     style={{ width: `${z.percentage}%` }}
                   />
                 </div>
-                <span className="w-9 text-right text-xs font-medium tabular-nums text-gray-700">
+                <span className="w-9 text-right text-xs font-medium tabular-nums text-gray-700 dark:text-gray-300">
                   {z.percentage}%
                 </span>
               </div>
@@ -429,16 +429,16 @@ function MetricCard({
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="flex items-center gap-2 text-sm text-gray-500">
+        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           {icon}
           {label}
         </div>
-        <p className="mt-1 text-xl font-bold tabular-nums text-gray-900">
+        <p className="mt-1 text-xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
           {value}
         </p>
         {sub && (
           <div className="flex items-center gap-2 mt-0.5">
-            <p className="text-xs text-gray-400 tabular-nums">{sub}</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 tabular-nums">{sub}</p>
             {ifCategory && (
               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ifCategory.color}`}>
                 {ifCategory.label}
