@@ -11,9 +11,11 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  LineChart,
   BarChart,
   Bar,
   Cell,
+  Brush,
 } from "recharts";
 import type { PowerCurvePoint } from "@/types";
 
@@ -24,60 +26,123 @@ interface StreamData {
   speed: number[];
   altitude: number[];
   laps?: number[];
-  /** Seconds represented by each array index (default 1). Set to 5 for downsampled streams. */
   samplingRate?: number;
 }
 
 const SERIES_CONFIG = [
-  { key: "power",     label: "Potenza",   unit: "W",    color: "#8B5CF6" },
-  { key: "heartRate", label: "FC",        unit: "bpm",  color: "#EF4444" },
-  { key: "speed",     label: "Velocità",  unit: "km/h", color: "#3B82F6" },
-  { key: "cadence",   label: "Cadenza",   unit: "rpm",  color: "#F59E0B" },
-  { key: "altitude",  label: "Altitudine",unit: "m",    color: "#6B7280" },
+  { key: "power",     label: "Potenza",      unit: "W",   color: "#8B5CF6" },
+  { key: "heartRate", label: "FC",           unit: "bpm", color: "#EF4444" },
+  { key: "speed",     label: "Velocità",     unit: "km/h",color: "#3B82F6" },
+  { key: "cadence",   label: "Cadenza",      unit: "rpm", color: "#F59E0B" },
+  { key: "altitude",  label: "Altitudine",   unit: "m",   color: "#6B7280" },
+  { key: "tss",       label: "TSS Cumulato", unit: "",    color: "#10B981" },
 ] as const;
 
 type SeriesKey = (typeof SERIES_CONFIG)[number]["key"];
-
 type ChartPoint = { time: number } & Record<SeriesKey, number>;
 
 function formatTime(seconds: number) {
-  const m = Math.floor(seconds / 60);
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
+  if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 function getYAxisId(key: SeriesKey, powerActive: boolean, activeSeries: SeriesKey[]): string {
   if (key === "power") return "left";
+  if (key === "tss") return "right-tss";
   if (!powerActive) {
-    // No power: first active non-power series goes to left, rest to right
-    const nonPowerActive = activeSeries.filter((k) => k !== "power");
-    if (nonPowerActive[0] === key) return "left";
+    const others = activeSeries.filter((k) => k !== "power" && k !== "tss");
+    if (others[0] === key) return "left";
   }
   return `right-${key}`;
 }
 
-export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: number[] }) {
+function computeNP(powers: number[], windowSamples: number): number {
+  const w = Math.max(1, windowSamples);
+  if (powers.length < w) {
+    const valid = powers.filter((p) => p > 0);
+    return valid.length ? Math.round(valid.reduce((a, b) => a + b, 0) / valid.length) : 0;
+  }
+  const rolling: number[] = [];
+  for (let i = w - 1; i < powers.length; i++) {
+    let sum = 0;
+    for (let j = i - w + 1; j <= i; j++) sum += powers[j];
+    rolling.push(sum / w);
+  }
+  const fourth = rolling.reduce((s, v) => s + v ** 4, 0) / rolling.length;
+  return Math.round(fourth ** 0.25);
+}
+
+export function ActivityCharts({
+  streams,
+  laps,
+  ftp,
+}: {
+  streams: StreamData;
+  laps?: number[];
+  ftp?: number;
+}) {
   const [active, setActive] = useState<Set<SeriesKey>>(new Set<SeriesKey>(["power"]));
+  const [brushRange, setBrushRange] = useState<{ startIndex: number; endIndex: number } | null>(null);
   const lapMarkers = laps ?? [];
   const samplingRate = streams.samplingRate ?? 1;
-
-  const step = Math.max(1, Math.floor((streams.power.length || 1) / 500));
+  const step = Math.max(1, Math.floor((streams.power.length || 1) / 600));
 
   const rawData = useMemo<ChartPoint[]>(() => {
     const data: ChartPoint[] = [];
+    const ftpVal = ftp ?? 0;
+    const dt = step * samplingRate;
+    let cumTSS = 0;
     for (let i = 0; i < streams.power.length; i += step) {
+      const pw = streams.power[i] || 0;
+      if (ftpVal > 0) cumTSS += (pw / ftpVal) ** 2 * dt / 3600 * 100;
       data.push({
-        // Convert array index to actual elapsed seconds
         time: i * samplingRate,
-        power:     streams.power[i]     || 0,
+        power: pw,
         heartRate: streams.heartRate[i] || 0,
-        cadence:   streams.cadence[i]   || 0,
-        speed:     Math.round((streams.speed[i] || 0) * 10) / 10,
-        altitude:  Math.round(streams.altitude[i] || 0),
+        cadence: streams.cadence[i] || 0,
+        speed: Math.round((streams.speed[i] || 0) * 10) / 10,
+        altitude: Math.round(streams.altitude[i] || 0),
+        tss: Math.round(cumTSS * 10) / 10,
       });
     }
     return data;
-  }, [streams, step, samplingRate]);
+  }, [streams, step, samplingRate, ftp]);
+
+  const selectionStats = useMemo(() => {
+    if (!brushRange) return null;
+    const { startIndex, endIndex } = brushRange;
+    const slice = rawData.slice(startIndex, endIndex + 1);
+    if (slice.length < 2) return null;
+    const dt = step * samplingRate;
+    const duration = slice.length * dt;
+    const powers = slice.map((p) => p.power);
+    const validPowers = powers.filter((p) => p > 0);
+    const avgPower = validPowers.length
+      ? Math.round(validPowers.reduce((a, b) => a + b, 0) / validPowers.length)
+      : 0;
+    const npWin = Math.max(1, Math.round(30 / (step * samplingRate)));
+    const np = computeNP(powers, npWin);
+    const cadences = slice.map((p) => p.cadence).filter((c) => c > 0);
+    const avgCadence = cadences.length
+      ? Math.round(cadences.reduce((a, b) => a + b, 0) / cadences.length)
+      : 0;
+    let ascent = 0;
+    for (let i = 1; i < slice.length; i++) {
+      const diff = slice[i].altitude - slice[i - 1].altitude;
+      if (diff > 0) ascent += diff;
+    }
+    const vam = duration > 0 ? Math.round((ascent / duration) * 3600) : 0;
+    const kj = Math.round((avgPower * duration) / 1000);
+    const if_ = ftp && ftp > 0 && np > 0 ? Math.round((np / ftp) * 100) / 100 : null;
+    const tss =
+      ftp && ftp > 0 && if_ != null
+        ? Math.round(((duration * np * if_) / (ftp * 3600)) * 100)
+        : null;
+    return { duration, avgPower, np, avgCadence, vam, kj, tss };
+  }, [brushRange, rawData, step, samplingRate, ftp]);
 
   const toggle = (key: SeriesKey) => {
     setActive((prev) => {
@@ -94,13 +159,12 @@ export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: 
   const activeSeries = SERIES_CONFIG.filter((s) => active.has(s.key));
   const powerActive = active.has("power");
 
-  // Series that go on the right axis
   const rightAxisSeries = activeSeries.filter((s) => {
     if (s.key === "power") return false;
+    if (s.key === "tss") return true;
     if (!powerActive) {
-      // First non-power series goes to left
-      const nonPowerActive = activeSeries.filter((a) => a.key !== "power");
-      if (nonPowerActive[0]?.key === s.key) return false;
+      const others = activeSeries.filter((a) => a.key !== "power" && a.key !== "tss");
+      if (others[0]?.key === s.key) return false;
     }
     return true;
   });
@@ -125,16 +189,29 @@ export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: 
     );
   };
 
-  // Left axis config: power if active, else first non-power series
   const leftAxisSeries = powerActive
     ? SERIES_CONFIG.find((s) => s.key === "power")!
-    : activeSeries[0];
+    : activeSeries.find((s) => s.key !== "tss") ?? activeSeries[0];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleBrushChange = (range: any) => {
+    if (
+      range?.startIndex != null &&
+      range?.endIndex != null &&
+      range.startIndex !== range.endIndex
+    ) {
+      setBrushRange({ startIndex: range.startIndex, endIndex: range.endIndex });
+    } else {
+      setBrushRange(null);
+    }
+  };
 
   return (
     <div className="w-full space-y-3">
       {/* Series toggles */}
       <div className="flex flex-wrap gap-2">
         {SERIES_CONFIG.map(({ key, label, color }) => {
+          if (key === "tss" && !ftp) return null;
           const isActive = active.has(key);
           return (
             <button
@@ -153,74 +230,112 @@ export function ActivityCharts({ streams, laps }: { streams: StreamData; laps?: 
         })}
       </div>
 
-      <ResponsiveContainer width="100%" height={250}>
-        <ComposedChart data={rawData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-          <XAxis dataKey="time" tick={{ fontSize: 11 }} tickFormatter={formatTime} />
+      <div className="flex gap-3 items-start">
+        <div className="flex-1 min-w-0">
+          <ResponsiveContainer width="100%" height={420}>
+            <ComposedChart data={rawData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="time" tick={{ fontSize: 11 }} tickFormatter={formatTime} />
 
-          {/* Left axis: always power (or first series if power not active) */}
-          <YAxis
-            yAxisId="left"
-            unit={leftAxisSeries?.unit ?? ""}
-            tick={{ fontSize: 11 }}
-            domain={["auto", "auto"]}
-            width={45}
-          />
-
-          {/* One right axis per non-power active series */}
-          {rightAxisSeries.map(({ key, unit }) => (
-            <YAxis
-              key={key}
-              yAxisId={`right-${key}`}
-              orientation="right"
-              unit={unit}
-              tick={{ fontSize: 11 }}
-              domain={["auto", "auto"]}
-              width={40}
-            />
-          ))}
-
-          <Tooltip content={renderTooltip} />
-
-          {activeSeries.map(({ key, color }) =>
-            key === "altitude" ? (
-              <Area
-                key={key}
-                yAxisId={getYAxisId(key, powerActive, activeSeries.map((s) => s.key))}
-                type="monotone"
-                dataKey={key}
-                stroke={color}
-                strokeWidth={1.5}
-                fill="rgba(107,114,128,0.15)"
-                dot={false}
-                isAnimationActive={false}
+              <YAxis
+                yAxisId="left"
+                unit={leftAxisSeries?.unit ?? ""}
+                tick={{ fontSize: 11 }}
+                domain={["auto", "auto"]}
+                width={45}
               />
-            ) : (
-              <Line
-                key={key}
-                yAxisId={getYAxisId(key, powerActive, activeSeries.map((s) => s.key))}
-                type="monotone"
-                dataKey={key}
-                stroke={color}
-                strokeWidth={1.5}
-                dot={false}
-                isAnimationActive={false}
-              />
-            )
-          )}
 
-          {lapMarkers.map((x, i) => (
-            <ReferenceLine
-              key={i}
-              yAxisId="left"
-              x={x}
-              stroke="#94A3B8"
-              strokeDasharray="4 2"
-              label={{ value: `G${i + 1}`, position: "top", fontSize: 10, fill: "#94A3B8" }}
-            />
-          ))}
-        </ComposedChart>
-      </ResponsiveContainer>
+              {rightAxisSeries.map(({ key, unit }) => (
+                <YAxis
+                  key={key}
+                  yAxisId={`right-${key}`}
+                  orientation="right"
+                  unit={unit}
+                  tick={{ fontSize: 11 }}
+                  domain={key === "tss" ? [0, "auto"] : ["auto", "auto"]}
+                  width={40}
+                />
+              ))}
+
+              <Tooltip content={renderTooltip} />
+
+              {activeSeries.map(({ key, color }) =>
+                key === "altitude" ? (
+                  <Area
+                    key={key}
+                    yAxisId={getYAxisId(key, powerActive, activeSeries.map((s) => s.key))}
+                    type="monotone"
+                    dataKey={key}
+                    stroke={color}
+                    strokeWidth={1.5}
+                    fill="rgba(107,114,128,0.15)"
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                ) : (
+                  <Line
+                    key={key}
+                    yAxisId={getYAxisId(key, powerActive, activeSeries.map((s) => s.key))}
+                    type="monotone"
+                    dataKey={key}
+                    stroke={color}
+                    strokeWidth={1.5}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                )
+              )}
+
+              {lapMarkers.map((x, i) => (
+                <ReferenceLine
+                  key={i}
+                  yAxisId="left"
+                  x={x}
+                  stroke="#94A3B8"
+                  strokeDasharray="4 2"
+                  label={{ value: `G${i + 1}`, position: "top", fontSize: 10, fill: "#94A3B8" }}
+                />
+              ))}
+
+              <Brush
+                dataKey="time"
+                height={28}
+                stroke="#e2e8f0"
+                fill="#f8fafc"
+                travellerWidth={8}
+                tickFormatter={formatTime}
+                onChange={handleBrushChange}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+
+        {selectionStats && (
+          <div className="w-44 shrink-0 rounded-xl border border-zinc-100 bg-zinc-50 p-3 space-y-2">
+            <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wide">
+              Selezione
+            </p>
+            <StatRow label="Durata" value={formatTime(selectionStats.duration)} />
+            <StatRow label="Potenza avg" value={`${selectionStats.avgPower} W`} />
+            <StatRow label="NP" value={`${selectionStats.np} W`} />
+            <StatRow label="Cadenza" value={`${selectionStats.avgCadence} rpm`} />
+            <StatRow label="VAM" value={`${selectionStats.vam} m/h`} />
+            <StatRow label="kJ" value={`${selectionStats.kj}`} />
+            {selectionStats.tss != null && (
+              <StatRow label="TSS" value={`${selectionStats.tss}`} />
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-1 text-xs">
+      <span className="text-zinc-400">{label}</span>
+      <span className="font-medium text-zinc-800 tabular-nums">{value}</span>
     </div>
   );
 }
@@ -231,7 +346,7 @@ interface LapMetric {
   lap: string;
   avgPower: number;
   avgCadence: number;
-  duration: number; // seconds
+  duration: number;
 }
 
 function avgNonZero(arr: number[]): number {
@@ -257,7 +372,6 @@ export function LapAnalysisChart({
     const sr = streams.samplingRate ?? 1;
     const totalSec = streams.power.length * sr;
     const boundaries = [0, ...laps, totalSec];
-
     return boundaries.slice(0, -1).map((start, i) => {
       const end = boundaries[i + 1];
       const si = Math.round(start / sr);
@@ -292,7 +406,7 @@ export function LapAnalysisChart({
           <p className="mb-1 text-xs font-medium text-zinc-500 uppercase tracking-wide">
             {label}
           </p>
-          <ResponsiveContainer width="100%" height={120}>
+          <ResponsiveContainer width="100%" height={190}>
             <BarChart data={lapData} barCategoryGap="30%">
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
               <XAxis dataKey="lap" tick={{ fontSize: 11 }} />
@@ -326,18 +440,6 @@ export function LapAnalysisChart({
 
 // ─── Power Curve Chart ────────────────────────────────────────────────────────
 
-const POWER_CURVE_COLORS = [
-  "#EF4444",
-  "#F59E0B",
-  "#F59E0B",
-  "#10B981",
-  "#3B82F6",
-  "#3B82F6",
-  "#8B5CF6",
-  "#8B5CF6",
-  "#6B7280",
-];
-
 const DURATION_LABELS: Record<number, string> = {
   1: "1s",
   5: "5s",
@@ -358,17 +460,24 @@ export function PowerCurveChart({ powerCurve }: { powerCurve: PowerCurvePoint[] 
 
   return (
     <ResponsiveContainer width="100%" height={250}>
-      <BarChart data={data}>
+      <LineChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-        <YAxis tick={{ fontSize: 11 }} unit="W" />
-        <Tooltip formatter={(val) => [`${val}W`, "Best Power"]} />
-        <Bar dataKey="power" radius={[4, 4, 0, 0]}>
-          {data.map((_, index) => (
-            <Cell key={`cell-${index}`} fill={POWER_CURVE_COLORS[index] || "#8B5CF6"} />
-          ))}
-        </Bar>
-      </BarChart>
+        <YAxis tick={{ fontSize: 11 }} unit="W" domain={["auto", "auto"]} />
+        <Tooltip
+          formatter={(val: number | undefined) =>
+            val != null ? [`${val}W`, "Best Power"] : ["—", "Best Power"]
+          }
+        />
+        <Line
+          type="monotone"
+          dataKey="power"
+          stroke="#8B5CF6"
+          strokeWidth={2.5}
+          dot={{ r: 4, fill: "#8B5CF6", strokeWidth: 0 }}
+          isAnimationActive={false}
+        />
+      </LineChart>
     </ResponsiveContainer>
   );
 }

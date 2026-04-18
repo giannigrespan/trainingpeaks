@@ -71,6 +71,8 @@ interface ZoneData {
   zone: string;
   percentage: number;
   seconds: number;
+  minWatts?: number;
+  maxWatts?: number | null;
 }
 
 const ZONE_COLORS = [
@@ -79,6 +81,7 @@ const ZONE_COLORS = [
   "bg-emerald-400",
   "bg-orange-400",
   "bg-rose-500",
+  "bg-red-700",
 ];
 
 function getIFCategory(if_: number): { label: string; color: string } {
@@ -155,10 +158,13 @@ export default function ActivityDetailPage() {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
-    return h > 0
-      ? `${h}h ${m}m ${s}s`
-      : `${m}m ${s}s`;
+    return h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
   }
+
+  const derivedFtp =
+    activity.normalizedPower && activity.intensityFactor
+      ? Math.round(activity.normalizedPower / activity.intensityFactor)
+      : undefined;
 
   return (
     <div className="space-y-6">
@@ -172,9 +178,7 @@ export default function ActivityDetailPage() {
         </Link>
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              {activity.name}
-            </h1>
+            <h1 className="text-2xl font-bold text-gray-900">{activity.name}</h1>
             <p className="text-sm text-gray-500">
               {format(new Date(activity.activityDate), "EEEE d MMMM yyyy, HH:mm", {
                 locale: it,
@@ -197,8 +201,22 @@ export default function ActivityDetailPage() {
         </div>
       </div>
 
+      {/* GPS Route Map — shown at top when available */}
+      {streams?.lat && streams.lat.length > 1 && streams.lng && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Percorso</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0 overflow-hidden rounded-b-xl">
+            <div className="h-72">
+              <RouteMap lat={streams.lat} lng={streams.lng} />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Metrics Grid */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-3">
         <MetricCard
           icon={<Clock className="h-4 w-4 text-blue-600" />}
           label="Durata"
@@ -242,7 +260,11 @@ export default function ActivityDetailPage() {
           icon={<Zap className="h-4 w-4 text-yellow-600" />}
           label="Cadenza"
           value={`${activity.avgCadence} rpm`}
-          sub={`${activity.calories} kcal`}
+        />
+        <MetricCard
+          icon={<Zap className="h-4 w-4 text-orange-500" />}
+          label="Calorie"
+          value={`${activity.calories} kcal`}
         />
       </div>
 
@@ -253,7 +275,7 @@ export default function ActivityDetailPage() {
             <CardTitle className="text-lg">Grafici</CardTitle>
           </CardHeader>
           <CardContent>
-            <ActivityCharts streams={streams} laps={streams.laps} />
+            <ActivityCharts streams={streams} laps={streams.laps} ftp={derivedFtp} />
           </CardContent>
         </Card>
       )}
@@ -281,7 +303,14 @@ export default function ActivityDetailPage() {
           <CardContent className="space-y-2">
             {zones.map((z, i) => (
               <div key={z.zone} className="flex items-center gap-3">
-                <span className="w-32 shrink-0 text-xs text-gray-500">{z.zone}</span>
+                <div className="w-44 shrink-0">
+                  <div className="text-xs text-gray-600">{z.zone}</div>
+                  {z.minWatts != null && (
+                    <div className="text-[10px] text-zinc-400 tabular-nums">
+                      {z.minWatts}–{z.maxWatts != null ? `${z.maxWatts} W` : "∞"}
+                    </div>
+                  )}
+                </div>
                 <div className="flex-1 h-4 rounded-full bg-zinc-100 overflow-hidden">
                   <div
                     className={`h-full rounded-full ${ZONE_COLORS[i] ?? "bg-zinc-400"}`}
@@ -321,19 +350,6 @@ export default function ActivityDetailPage() {
         </Card>
       )}
 
-      {/* GPS Route Map */}
-      {streams?.lat && streams.lat.length > 1 && streams.lng && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Percorso</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 overflow-hidden rounded-b-xl">
-            <div className="h-80">
-              <RouteMap lat={streams.lat} lng={streams.lng} />
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

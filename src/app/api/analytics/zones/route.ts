@@ -58,7 +58,21 @@ export async function GET(req: NextRequest) {
 
     const zones = calculateZoneDistribution(streams.power as number[], ftp);
 
-    return NextResponse.json({ success: true, data: { zones } });
+    const zoneBounds = [
+      { min: 0,                       max: Math.round(ftp * 0.55) },
+      { min: Math.round(ftp * 0.55),  max: Math.round(ftp * 0.75) },
+      { min: Math.round(ftp * 0.75),  max: Math.round(ftp * 0.90) },
+      { min: Math.round(ftp * 0.90),  max: Math.round(ftp * 1.05) },
+      { min: Math.round(ftp * 1.05),  max: Math.round(ftp * 1.20) },
+      { min: Math.round(ftp * 1.20),  max: null },
+    ];
+    const zonesWithWatts = zones.map((z, i) => ({
+      ...z,
+      minWatts: zoneBounds[i]?.min ?? 0,
+      maxWatts: zoneBounds[i]?.max ?? null,
+    }));
+
+    return NextResponse.json({ success: true, data: { zones: zonesWithWatts } });
   } catch (error) {
     console.error("Zones error:", error);
     return NextResponse.json(
