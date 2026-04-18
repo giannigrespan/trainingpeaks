@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   ComposedChart,
   Line,
@@ -40,6 +40,20 @@ const SERIES_CONFIG = [
 
 type SeriesKey = (typeof SERIES_CONFIG)[number]["key"];
 type ChartPoint = { time: number } & Record<SeriesKey, number>;
+
+function useDarkMode() {
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    const el = document.documentElement;
+    setIsDark(el.classList.contains("dark"));
+    const obs = new MutationObserver(() =>
+      setIsDark(el.classList.contains("dark"))
+    );
+    obs.observe(el, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
+  return isDark;
+}
 
 function formatTime(seconds: number) {
   const h = Math.floor(seconds / 3600);
@@ -84,11 +98,18 @@ export function ActivityCharts({
   laps?: number[];
   ftp?: number;
 }) {
+  const isDark = useDarkMode();
   const [active, setActive] = useState<Set<SeriesKey>>(new Set<SeriesKey>(["power"]));
   const [brushRange, setBrushRange] = useState<{ startIndex: number; endIndex: number } | null>(null);
   const lapMarkers = laps ?? [];
   const samplingRate = streams.samplingRate ?? 1;
   const step = Math.max(1, Math.floor((streams.power.length || 1) / 600));
+
+  const gridColor  = isDark ? "#374151" : "#f0f0f0";
+  const brushFill  = isDark ? "#1f2937" : "#f8fafc";
+  const brushStroke= isDark ? "#374151" : "#e2e8f0";
+  const altFill    = isDark ? "rgba(107,114,128,0.30)" : "rgba(107,114,128,0.15)";
+  const axisColor  = isDark ? "#9ca3af" : "#6b7280";
 
   const rawData = useMemo<ChartPoint[]>(() => {
     const data: ChartPoint[] = [];
@@ -173,8 +194,8 @@ export function ActivityCharts({
   const renderTooltip = ({ active: on, payload, label }: any) => {
     if (!on || !payload?.length) return null;
     return (
-      <div className="bg-white border border-gray-200 rounded p-2 text-xs shadow">
-        <div className="font-medium mb-1">{formatTime(label as number)}</div>
+      <div className="bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded p-2 text-xs shadow">
+        <div className="font-medium mb-1 text-gray-900 dark:text-gray-100">{formatTime(label as number)}</div>
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         {payload.map((entry: any) => {
           const cfg = SERIES_CONFIG.find((s) => s.key === entry.dataKey);
@@ -220,7 +241,7 @@ export function ActivityCharts({
               className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                 isActive
                   ? "text-white border-transparent"
-                  : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+                  : "bg-white dark:bg-zinc-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-zinc-600 hover:border-gray-400 dark:hover:border-zinc-400"
               }`}
               style={isActive ? { backgroundColor: color, borderColor: color } : {}}
             >
@@ -234,13 +255,17 @@ export function ActivityCharts({
         <div className="flex-1 min-w-0">
           <ResponsiveContainer width="100%" height={420}>
             <ComposedChart data={rawData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="time" tick={{ fontSize: 11 }} tickFormatter={formatTime} />
+              <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+              <XAxis
+                dataKey="time"
+                tick={{ fontSize: 11, fill: axisColor }}
+                tickFormatter={formatTime}
+              />
 
               <YAxis
                 yAxisId="left"
                 unit={leftAxisSeries?.unit ?? ""}
-                tick={{ fontSize: 11 }}
+                tick={{ fontSize: 11, fill: axisColor }}
                 domain={["auto", "auto"]}
                 width={45}
               />
@@ -251,7 +276,7 @@ export function ActivityCharts({
                   yAxisId={`right-${key}`}
                   orientation="right"
                   unit={unit}
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: 11, fill: axisColor }}
                   domain={key === "tss" ? [0, "auto"] : ["auto", "auto"]}
                   width={40}
                 />
@@ -268,7 +293,7 @@ export function ActivityCharts({
                     dataKey={key}
                     stroke={color}
                     strokeWidth={1.5}
-                    fill="rgba(107,114,128,0.15)"
+                    fill={altFill}
                     dot={false}
                     isAnimationActive={false}
                   />
@@ -291,17 +316,17 @@ export function ActivityCharts({
                   key={i}
                   yAxisId="left"
                   x={x}
-                  stroke="#94A3B8"
+                  stroke={isDark ? "#64748b" : "#94A3B8"}
                   strokeDasharray="4 2"
-                  label={{ value: `G${i + 1}`, position: "top", fontSize: 10, fill: "#94A3B8" }}
+                  label={{ value: `G${i + 1}`, position: "top", fontSize: 10, fill: isDark ? "#64748b" : "#94A3B8" }}
                 />
               ))}
 
               <Brush
                 dataKey="time"
                 height={28}
-                stroke="#e2e8f0"
-                fill="#f8fafc"
+                stroke={brushStroke}
+                fill={brushFill}
                 travellerWidth={8}
                 tickFormatter={formatTime}
                 onChange={handleBrushChange}
@@ -311,8 +336,8 @@ export function ActivityCharts({
         </div>
 
         {selectionStats && (
-          <div className="w-44 shrink-0 rounded-xl border border-zinc-100 bg-zinc-50 p-3 space-y-2">
-            <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wide">
+          <div className="w-44 shrink-0 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 p-3 space-y-2">
+            <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
               Selezione
             </p>
             <StatRow label="Durata" value={formatTime(selectionStats.duration)} />
@@ -334,8 +359,8 @@ export function ActivityCharts({
 function StatRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-1 text-xs">
-      <span className="text-zinc-400">{label}</span>
-      <span className="font-medium text-zinc-800 tabular-nums">{value}</span>
+      <span className="text-zinc-500 dark:text-zinc-400">{label}</span>
+      <span className="font-medium text-zinc-800 dark:text-zinc-100 tabular-nums">{value}</span>
     </div>
   );
 }
@@ -368,6 +393,7 @@ export function LapAnalysisChart({
   streams: StreamData;
   laps: number[];
 }) {
+  const isDark = useDarkMode();
   const lapData = useMemo<LapMetric[]>(() => {
     const sr = streams.samplingRate ?? 1;
     const totalSec = streams.power.length * sr;
@@ -387,6 +413,9 @@ export function LapAnalysisChart({
 
   if (!lapData.length) return null;
 
+  const gridColor = isDark ? "#374151" : "#f0f0f0";
+  const axisColor = isDark ? "#9ca3af" : "#6b7280";
+
   const miniCharts: {
     label: string;
     key: keyof LapMetric;
@@ -403,20 +432,26 @@ export function LapAnalysisChart({
     <div className="space-y-4">
       {miniCharts.map(({ label, key, unit, color, formatter }) => (
         <div key={key}>
-          <p className="mb-1 text-xs font-medium text-zinc-500 uppercase tracking-wide">
+          <p className="mb-1 text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
             {label}
           </p>
           <ResponsiveContainer width="100%" height={190}>
             <BarChart data={lapData} barCategoryGap="30%">
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-              <XAxis dataKey="lap" tick={{ fontSize: 11 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+              <XAxis dataKey="lap" tick={{ fontSize: 11, fill: axisColor }} />
               <YAxis
-                tick={{ fontSize: 11 }}
+                tick={{ fontSize: 11, fill: axisColor }}
                 unit={unit}
                 width={key === "duration" ? 42 : 40}
                 tickFormatter={formatter}
               />
               <Tooltip
+                contentStyle={{
+                  backgroundColor: isDark ? "#1f2937" : "#ffffff",
+                  borderColor: isDark ? "#374151" : "#e5e7eb",
+                  color: isDark ? "#f3f4f6" : "#111827",
+                  fontSize: 12,
+                }}
                 formatter={(val: number | undefined) =>
                   val == null
                     ? ["—", label]
@@ -453,6 +488,10 @@ const DURATION_LABELS: Record<number, string> = {
 };
 
 export function PowerCurveChart({ powerCurve }: { powerCurve: PowerCurvePoint[] }) {
+  const isDark = useDarkMode();
+  const gridColor = isDark ? "#374151" : "#f0f0f0";
+  const axisColor = isDark ? "#9ca3af" : "#6b7280";
+
   const data = powerCurve.map((p) => ({
     label: DURATION_LABELS[p.duration] || `${p.duration}s`,
     power: p.power,
@@ -461,10 +500,16 @@ export function PowerCurveChart({ powerCurve }: { powerCurve: PowerCurvePoint[] 
   return (
     <ResponsiveContainer width="100%" height={250}>
       <LineChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-        <YAxis tick={{ fontSize: 11 }} unit="W" domain={["auto", "auto"]} />
+        <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+        <XAxis dataKey="label" tick={{ fontSize: 11, fill: axisColor }} />
+        <YAxis tick={{ fontSize: 11, fill: axisColor }} unit="W" domain={["auto", "auto"]} />
         <Tooltip
+          contentStyle={{
+            backgroundColor: isDark ? "#1f2937" : "#ffffff",
+            borderColor: isDark ? "#374151" : "#e5e7eb",
+            color: isDark ? "#f3f4f6" : "#111827",
+            fontSize: 12,
+          }}
           formatter={(val: number | undefined) =>
             val != null ? [`${val}W`, "Best Power"] : ["—", "Best Power"]
           }
