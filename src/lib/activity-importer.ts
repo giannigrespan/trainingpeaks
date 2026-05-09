@@ -17,12 +17,29 @@ export interface ImportOptions {
 /** Keep 1 sample every STREAM_STEP seconds to reduce storage ~80% */
 const STREAM_STEP = 5;
 
+// Physiological upper bounds — values beyond these are hardware glitches
+const MAX_POWER_W  = 3000; // exceeds any human record; UCI world record ~2400W
+const MAX_HR_BPM   = 220;
+const MAX_CADENCE  = 200;  // no cyclist spins above this
+const MAX_SPEED_KMH = 150; // covers downhill racing
+
+function sanitizeStream(arr: number[], max: number): number[] {
+  return arr.map(v => (v > 0 && v <= max ? v : 0));
+}
+
 function downsample<T>(arr: T[]): T[] {
   return arr.filter((_, i) => i % STREAM_STEP === 0);
 }
 
 export async function importFitBuffer(buffer: Buffer, options: ImportOptions) {
   const parsedData = parseFitFile(buffer);
+
+  // Clamp streams to physiological bounds — guards against power meter spikes
+  // and any sentinel values the parser may have missed (e.g. device firmware bugs)
+  parsedData.power     = sanitizeStream(parsedData.power,     MAX_POWER_W);
+  parsedData.heartRate = sanitizeStream(parsedData.heartRate, MAX_HR_BPM);
+  parsedData.cadence   = sanitizeStream(parsedData.cadence,   MAX_CADENCE);
+  parsedData.speed     = sanitizeStream(parsedData.speed,     MAX_SPEED_KMH);
 
   const db = await getDb();
   const user = await db

@@ -281,28 +281,51 @@ function readDataMessage(
           }
           break;
         case RECORD_FIELD_POWER:
-          recordPower = value as number;
+          // uint16 invalid sentinel = 0xFFFF (65535) — skip glitch spikes
+          if ((value as number) !== 0xffff) {
+            recordPower = value as number;
+          }
           break;
         case RECORD_FIELD_HEART_RATE:
-          recordHR = value as number;
+          // uint8 invalid sentinel = 0xFF (255)
+          if ((value as number) !== 0xff) {
+            recordHR = value as number;
+          }
           break;
         case RECORD_FIELD_CADENCE:
-          recordCadence = value as number;
+          // uint8 invalid sentinel = 0xFF (255)
+          if ((value as number) !== 0xff) {
+            recordCadence = value as number;
+          }
           break;
         case RECORD_FIELD_SPEED:
-          recordSpeed = ((value as number) / 1000) * 3.6; // mm/s to km/h
+          // uint16 invalid sentinel = 0xFFFF
+          if ((value as number) !== 0xffff) {
+            recordSpeed = ((value as number) / 1000) * 3.6; // mm/s to km/h
+          }
           break;
         case RECORD_FIELD_ALTITUDE:
-          recordAltitude = (value as number) / 5 - 500; // FIT altitude encoding
+          // uint16 invalid sentinel = 0xFFFF; raw 0x7FFF (sint16 max) also invalid
+          if ((value as number) !== 0xffff && (value as number) !== 0x7fff) {
+            recordAltitude = (value as number) / 5 - 500; // FIT altitude encoding
+          }
           break;
         case RECORD_FIELD_DISTANCE:
-          recordDistance = (value as number) / 100; // cm to m
+          // uint32 invalid sentinel = 0xFFFFFFFF
+          if ((value as number) !== 0xffffffff) {
+            recordDistance = (value as number) / 100; // cm to m
+          }
           break;
         case RECORD_FIELD_LATITUDE:
-          recordLat = ((value as number) * 180) / 2147483648; // semicircles to degrees
+          // sint32 invalid sentinel = 0x7FFFFFFF
+          if ((value as number) !== 0x7fffffff) {
+            recordLat = ((value as number) * 180) / 2147483648; // semicircles to degrees
+          }
           break;
         case RECORD_FIELD_LONGITUDE:
-          recordLng = ((value as number) * 180) / 2147483648;
+          if ((value as number) !== 0x7fffffff) {
+            recordLng = ((value as number) * 180) / 2147483648;
+          }
           break;
       }
     }
