@@ -18,7 +18,8 @@ import {
   Upload,
   Trash2,
 } from "lucide-react";
-import { PMCChart } from "@/components/charts/pmc-chart";
+import { PMCChart, type PMCData } from "@/components/charts/pmc-chart";
+import { getTSBInterpretation } from "@/lib/calculations";
 import {
   LineChart,
   Line,
@@ -48,13 +49,6 @@ interface PowerCurvePoint {
   recent: number;
 }
 
-interface PMCEntry {
-  date: string;
-  ctl: number;
-  atl: number;
-  tsb: number;
-  tss: number;
-}
 
 interface PowerZones {
   z1: { min: number; max: number };
@@ -66,14 +60,6 @@ interface PowerZones {
 }
 
 // ─── MetricCard ───────────────────────────────────────────────────────────────
-
-function getTSBLabel(tsb: number): { text: string; color: string } {
-  if (tsb > 25)  return { text: "Transizione",    color: "text-gray-400" };
-  if (tsb > 10)  return { text: "Fresco",         color: "text-emerald-500" };
-  if (tsb >= -10) return { text: "Forma ottimale", color: "text-blue-500" };
-  if (tsb >= -30) return { text: "Affaticato",    color: "text-amber-500" };
-  return                  { text: "Sovraccarico",  color: "text-red-500" };
-}
 
 interface TSBStatus {
   emoji: string;
@@ -184,7 +170,9 @@ function DashboardContent() {
   const checkoutSuccess = searchParams.get("checkout") === "success";
   const { update: updateSession } = useSession();
   const [activities, setActivities] = useState<ActivitySummary[]>([]);
-  const [pmcData, setPmcData] = useState<PMCEntry[]>([]);
+  const [pmcData, setPmcData] = useState<PMCData[]>([]);
+  const [pmcLoading, setPmcLoading] = useState(true);
+  const [pmcDays, setPmcDays] = useState(90);
   const [powerZones, setPowerZones] = useState<PowerZones | null>(null);
   const [ftp, setFtp] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -203,14 +191,12 @@ function DashboardContent() {
   useEffect(() => {
     Promise.all([
       fetch("/api/activities?limit=10").then((r) => r.json()),
-      fetch("/api/analytics/pmc?days=90").then((r) => r.json()),
       fetch("/api/user/profile").then((r) => r.json()),
       fetch("/api/analytics/power-curve").then((r) => r.json()),
       fetch("/api/analytics/power-curve?scope=ytd").then((r) => r.json()),
     ])
-      .then(([actRes, pmcRes, profileRes, pcRes, ytdRes]) => {
+      .then(([actRes, profileRes, pcRes, ytdRes]) => {
         if (actRes.success) setActivities(actRes.data);
-        if (pmcRes.success) setPmcData(pmcRes.data);
         if (profileRes.success && profileRes.data) {
           setPowerZones(profileRes.data.powerZones ?? null);
           setFtp(profileRes.data.ftp ?? 0);
@@ -220,7 +206,6 @@ function DashboardContent() {
       })
       .finally(() => {
         setLoading(false);
-        // Auto-sync Wahoo in background — silenzioso, non blocca la UI
         fetch("/api/integrations/wahoo/sync", { method: "POST" })
           .then((r) => (r.ok ? r.json() : null))
           .then((data) => {
@@ -234,6 +219,14 @@ function DashboardContent() {
           .catch(() => {});
       });
   }, []);
+
+  useEffect(() => {
+    setPmcLoading(true);
+    fetch(`/api/analytics/pmc?days=${pmcDays}`)
+      .then((r) => r.json())
+      .then((res) => { if (res.success) setPmcData(res.data); })
+      .finally(() => setPmcLoading(false));
+  }, [pmcDays]);
 
   async function handleDelete(e: React.MouseEvent, id: string) {
     e.preventDefault();
@@ -315,7 +308,7 @@ function DashboardContent() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
         {/* Row 1 — 4 metric cards */}
-        {loading ? (
+        {(loading || pmcLoading) ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-24 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-800" />
           ))
@@ -341,8 +334,8 @@ function DashboardContent() {
               delta={lastPmc && prevPmc ? +(lastPmc.tsb - prevPmc.tsb).toFixed(1) : undefined}
               deltaLabel="vs ieri"
               color={lastPmc && lastPmc.tsb >= 0 ? "emerald" : "rose"}
-              sub={lastPmc ? getTSBLabel(lastPmc.tsb).text : undefined}
-              subColor={lastPmc ? getTSBLabel(lastPmc.tsb).color : undefined}
+              sub={lastPmc ? getTSBInterpretation(lastPmc.tsb).label : undefined}
+              subColor={lastPmc ? getTSBInterpretation(lastPmc.tsb).twColor : undefined}
             />
             <MetricCard
               title="IF Medio"
@@ -362,7 +355,12 @@ function DashboardContent() {
               CTL · ATL · TSB con TSS giornaliero
             </p>
           </div>
-          <PMCChart />
+          <PMCChart
+            data={pmcData}
+            loading={pmcLoading}
+            days={pmcDays}
+            onDaysChange={setPmcDays}
+          />
           {lastPmc && <PMCStatusBar ctl={lastPmc.ctl} atl={lastPmc.atl} tsb={lastPmc.tsb} />}
         </div>
 

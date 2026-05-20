@@ -12,5 +12,5 @@ export {
 export {
   calculateFitnessTimeSeries,
   updateFitnessFromDate,
-  getTSBZone,
+  getTSBInterpretation,
 } from './fitness-metrics';

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import {
   ComposedChart,
   Area,
@@ -14,8 +13,9 @@ import {
   ReferenceArea,
 } from "recharts";
 import { PMCLegend } from "./pmc-legend";
+import { getTSBInterpretation } from "@/lib/calculations";
 
-interface PMCData {
+export interface PMCData {
   date: string;
   ctl: number;
   atl: number;
@@ -24,28 +24,14 @@ interface PMCData {
   hasTSS: boolean;
 }
 
-function getTSBInterpretation(tsb: number): string {
-  if (tsb > 25)  return "Transizione";
-  if (tsb > 10)  return "Fresco";
-  if (tsb >= -10) return "Forma ottimale";
-  if (tsb >= -30) return "Affaticato";
-  return "Sovraccarico";
+interface PMCChartProps {
+  data: PMCData[];
+  loading: boolean;
+  days: number;
+  onDaysChange: (d: number) => void;
 }
 
-export function PMCChart() {
-  const [data, setData] = useState<PMCData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [days, setDays] = useState(90);
-
-  useEffect(() => {
-    setLoading(true);
-    fetch(`/api/analytics/pmc?days=${days}`)
-      .then((res) => res.json())
-      .then((res) => {
-        if (res.success) setData(res.data);
-      })
-      .finally(() => setLoading(false));
-  }, [days]);
+export function PMCChart({ data, loading, days, onDaysChange }: PMCChartProps) {
 
   if (loading) {
     return <div className="h-72 animate-pulse rounded-lg bg-gray-100 dark:bg-zinc-800" />;
@@ -63,11 +49,9 @@ export function PMCChart() {
 
   const tickInterval = days <= 30 ? 3 : days <= 90 ? 6 : days <= 180 ? 14 : 30;
 
-  // Left axis: CTL + ATL (always ≥ 0)
   const leftMax = Math.max(...data.map((d) => Math.max(d.ctl, d.atl)));
   const leftDomain: [number, number] = [0, Math.ceil(leftMax * 1.1) || 10];
 
-  // Right axis: TSB (negative/positive) + TSS scatter dots
   const tsbMin = Math.min(...data.map((d) => d.tsb), -5);
   const tssMax = Math.max(...data.map((d) => d.tss), 1);
   const rightMin = Math.floor(tsbMin - 5);
@@ -76,7 +60,7 @@ export function PMCChart() {
 
   return (
     <div className="space-y-3">
-      <PMCLegend days={days} onDaysChange={setDays} />
+      <PMCLegend days={days} onDaysChange={onDaysChange} />
 
       <ResponsiveContainer width="100%" height={300}>
         <ComposedChart data={data} margin={{ top: 4, right: 40, left: 0, bottom: 0 }}>
@@ -92,14 +76,12 @@ export function PMCChart() {
             }}
           />
 
-          {/* Left axis: CTL, ATL */}
           <YAxis
             yAxisId="left"
             tick={{ fontSize: 11 }}
             domain={leftDomain}
             width={36}
           />
-          {/* Right axis: TSB + TSS */}
           <YAxis
             yAxisId="right"
             orientation="right"
@@ -108,7 +90,6 @@ export function PMCChart() {
             width={40}
           />
 
-          {/* TSB Zone backgrounds (right axis) */}
           <ReferenceArea yAxisId="right" y1={rightMin} y2={-30} fill="rgba(239,68,68,0.07)" ifOverflow="extendDomain" />
           <ReferenceArea yAxisId="right" y1={-30} y2={-10} fill="rgba(251,191,36,0.08)" ifOverflow="extendDomain" />
           <ReferenceArea yAxisId="right" y1={-10} y2={10} fill="rgba(59,130,246,0.07)" ifOverflow="extendDomain" />
@@ -131,14 +112,13 @@ export function PMCChart() {
               };
               const rounded = Math.round(value as number);
               if (name === "tsb") {
-                return [`${rounded} — ${getTSBInterpretation(rounded)}`, labels[name as string] ?? name];
+                return [`${rounded} — ${getTSBInterpretation(rounded).label}`, labels[name as string] ?? name];
               }
               return [rounded, labels[name as string] ?? name];
             }}
             contentStyle={{ fontSize: 12 }}
           />
 
-          {/* CTL — area blu semitrasparente, asse sinistro */}
           <Area
             yAxisId="left"
             type="monotone"
@@ -152,7 +132,6 @@ export function PMCChart() {
             isAnimationActive={false}
           />
 
-          {/* ATL — linea magenta, asse sinistro */}
           <Line
             yAxisId="left"
             type="monotone"
@@ -164,7 +143,6 @@ export function PMCChart() {
             isAnimationActive={false}
           />
 
-          {/* TSB — linea gialla, asse destro */}
           <Line
             yAxisId="right"
             type="monotone"
@@ -176,7 +154,6 @@ export function PMCChart() {
             isAnimationActive={false}
           />
 
-          {/* TSS — puntini rossi solo nei giorni con allenamento, asse destro */}
           <Line
             yAxisId="right"
             dataKey="tss"
@@ -206,7 +183,6 @@ export function PMCChart() {
         </ComposedChart>
       </ResponsiveContainer>
 
-      {/* Summary stats */}
       {data.length > 0 && (() => {
         const last = data[data.length - 1];
         return (
@@ -223,7 +199,7 @@ export function PMCChart() {
               <p className={`text-lg font-bold tabular-nums text-amber-500`}>
                 {last.tsb > 0 ? "+" : ""}{last.tsb.toFixed(1)}
               </p>
-              <p className="text-xs text-zinc-500">TSB ({getTSBInterpretation(last.tsb)})</p>
+              <p className="text-xs text-zinc-500">TSB ({getTSBInterpretation(last.tsb).label})</p>
             </div>
           </div>
         );
