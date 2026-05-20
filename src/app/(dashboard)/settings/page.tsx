@@ -32,7 +32,7 @@ interface UserProfile {
   };
 }
 
-interface WahooStatus {
+interface IntegrationStatus {
   connected: boolean;
   connectedAt?: string;
   lastSyncAt?: string;
@@ -61,9 +61,14 @@ export default function SettingsPage() {
   } | null>(null);
 
   // Wahoo state
-  const [wahooStatus, setWahooStatus] = useState<WahooStatus | null>(null);
-  const [disconnecting, setDisconnecting] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const [wahooStatus, setWahooStatus] = useState<IntegrationStatus | null>(null);
+  const [wahooDisconnecting, setWahooDisconnecting] = useState(false);
+  const [wahooSyncing, setWahooSyncing] = useState(false);
+
+  // Garmin state
+  const [garminStatus, setGarminStatus] = useState<IntegrationStatus | null>(null);
+  const [garminDisconnecting, setGarminDisconnecting] = useState(false);
+  const [garminSyncing, setGarminSyncing] = useState(false);
 
   useEffect(() => {
     fetch("/api/user/profile")
@@ -82,12 +87,17 @@ export default function SettingsPage() {
       .then((res) => res.json())
       .then((data) => { if (data.success) setWahooStatus(data.data); });
 
+    fetch("/api/integrations/garmin/status")
+      .then((res) => res.json())
+      .then((data) => { if (data.success) setGarminStatus(data.data); });
+
     fetch("/api/analytics/ftp-suggestion")
       .then((res) => res.json())
       .then((data) => { if (data.success && data.data) setFtpSuggestion(data.data); });
 
-    // Handle OAuth redirect result
+    // Handle OAuth redirect results
     const params = new URLSearchParams(window.location.search);
+
     const wahooParam = params.get("wahoo");
     if (wahooParam === "connected") {
       toast({ title: "Wahoo collegato", description: "Account Wahoo connesso con successo!" });
@@ -98,6 +108,27 @@ export default function SettingsPage() {
       toast({
         title: "Errore Wahoo",
         description: "Impossibile collegare l'account Wahoo.",
+        variant: "destructive",
+      });
+    }
+
+    const garminParam = params.get("garmin");
+    if (garminParam === "connected") {
+      toast({ title: "Garmin collegato", description: "Account Garmin Connect connesso con successo!" });
+      fetch("/api/integrations/garmin/status")
+        .then((res) => res.json())
+        .then((data) => { if (data.success) setGarminStatus(data.data); });
+    } else if (garminParam === "error") {
+      const reason = params.get("reason");
+      const descriptions: Record<string, string> = {
+        denied: "Autorizzazione negata dall'utente.",
+        request_token_failed: "Errore nella comunicazione con Garmin. Riprova.",
+        invalid_token: "Sessione OAuth scaduta. Riprova.",
+        server_error: "Errore interno. Riprova tra qualche minuto.",
+      };
+      toast({
+        title: "Errore Garmin",
+        description: descriptions[reason ?? ""] ?? "Impossibile collegare l'account Garmin.",
         variant: "destructive",
       });
     }
@@ -142,7 +173,7 @@ export default function SettingsPage() {
   }
 
   async function handleWahooDisconnect() {
-    setDisconnecting(true);
+    setWahooDisconnecting(true);
     try {
       const res = await fetch("/api/integrations/wahoo/disconnect", { method: "POST" });
       const data = await res.json();
@@ -151,13 +182,55 @@ export default function SettingsPage() {
         toast({ title: "Wahoo disconnesso", description: "Account Wahoo disconnesso." });
       }
     } catch {
-      toast({
-        title: "Errore",
-        description: "Errore durante la disconnessione.",
-        variant: "destructive",
-      });
+      toast({ title: "Errore", description: "Errore durante la disconnessione.", variant: "destructive" });
     } finally {
-      setDisconnecting(false);
+      setWahooDisconnecting(false);
+    }
+  }
+
+  async function handleGarminDisconnect() {
+    setGarminDisconnecting(true);
+    try {
+      const res = await fetch("/api/integrations/garmin/disconnect", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setGarminStatus({ connected: false });
+        toast({ title: "Garmin disconnesso", description: "Account Garmin Connect disconnesso." });
+      }
+    } catch {
+      toast({ title: "Errore", description: "Errore durante la disconnessione.", variant: "destructive" });
+    } finally {
+      setGarminDisconnecting(false);
+    }
+  }
+
+  async function handleGarminSync() {
+    setGarminSyncing(true);
+    try {
+      const res = await fetch("/api/integrations/garmin/sync", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        const description = data.hasMore
+          ? `Importati: ${data.imported}${data.errors ? `, errori: ${data.errors}` : ""}. Ci sono altre attività da importare, clicca di nuovo.`
+          : `Importati: ${data.imported}, già presenti: ${data.skipped}${data.errors ? `, errori: ${data.errors}` : ""}`;
+        toast({
+          title: data.hasMore ? "Importazione parziale" : "Sincronizzazione completata",
+          description,
+        });
+        fetch("/api/integrations/garmin/status")
+          .then((r) => r.json())
+          .then((d) => { if (d.success) setGarminStatus(d.data); });
+      } else {
+        toast({
+          title: "Errore sincronizzazione",
+          description: data.error || "Errore durante l'importazione.",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({ title: "Errore", description: "Errore di connessione.", variant: "destructive" });
+    } finally {
+      setGarminSyncing(false);
     }
   }
 
@@ -175,7 +248,7 @@ export default function SettingsPage() {
   }
 
   async function handleWahooSync() {
-    setSyncing(true);
+    setWahooSyncing(true);
     try {
       const res = await fetch("/api/integrations/wahoo/sync", { method: "POST" });
       const data = await res.json();
@@ -198,13 +271,9 @@ export default function SettingsPage() {
         });
       }
     } catch {
-      toast({
-        title: "Errore",
-        description: "Errore di connessione.",
-        variant: "destructive",
-      });
+      toast({ title: "Errore", description: "Errore di connessione.", variant: "destructive" });
     } finally {
-      setSyncing(false);
+      setWahooSyncing(false);
     }
   }
 
@@ -401,9 +470,9 @@ export default function SettingsPage() {
                   variant="outline"
                   size="sm"
                   onClick={handleWahooSync}
-                  disabled={syncing || disconnecting}
+                  disabled={wahooSyncing || wahooDisconnecting}
                 >
-                  {syncing ? (
+                  {wahooSyncing ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <RefreshCw className="mr-2 h-4 w-4" />
@@ -414,10 +483,10 @@ export default function SettingsPage() {
                   variant="outline"
                   size="sm"
                   onClick={handleWahooDisconnect}
-                  disabled={disconnecting || syncing}
+                  disabled={wahooDisconnecting || wahooSyncing}
                   className="border-red-200 text-red-600 hover:bg-red-50"
                 >
-                  {disconnecting ? (
+                  {wahooDisconnecting ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <Link2Off className="mr-2 h-4 w-4" />
@@ -431,6 +500,75 @@ export default function SettingsPage() {
               <a href="/api/integrations/wahoo/connect">
                 <Link2 className="mr-2 h-4 w-4" />
                 Collega Wahoo
+              </a>
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Garmin Integration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <RefreshCw className="h-5 w-5" /> Integrazione Garmin Connect
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 text-sm text-gray-500">
+            Collega il tuo account Garmin Connect per importare automaticamente le attività tramite la Garmin Health API.
+          </p>
+          {garminStatus?.connected ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-green-600">
+                <Link2 className="h-4 w-4" />
+                <span>Account Garmin Connect collegato</span>
+              </div>
+              {garminStatus.connectedAt && (
+                <p className="text-xs text-gray-400">
+                  Collegato il: {new Date(garminStatus.connectedAt).toLocaleDateString("it-IT")}
+                </p>
+              )}
+              {garminStatus.lastSyncAt && (
+                <p className="text-xs text-gray-400">
+                  Ultima sincronizzazione:{" "}
+                  {new Date(garminStatus.lastSyncAt).toLocaleString("it-IT")}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGarminSync}
+                  disabled={garminSyncing || garminDisconnecting}
+                >
+                  {garminSyncing ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Importa storico
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGarminDisconnect}
+                  disabled={garminDisconnecting || garminSyncing}
+                  className="border-red-200 text-red-600 hover:bg-red-50"
+                >
+                  {garminDisconnecting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Link2Off className="mr-2 h-4 w-4" />
+                  )}
+                  Disconnetti Garmin
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" asChild>
+              <a href="/api/integrations/garmin/connect">
+                <Link2 className="mr-2 h-4 w-4" />
+                Collega Garmin Connect
               </a>
             </Button>
           )}

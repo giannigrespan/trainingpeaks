@@ -12,6 +12,7 @@ export interface ImportOptions {
   userId: string;
   name?: string;
   wahooWorkoutId?: string;
+  garminActivityId?: string;
 }
 
 /** Keep 1 sample every STREAM_STEP seconds to reduce storage ~80% */
@@ -103,6 +104,9 @@ export async function importFitBuffer(buffer: Buffer, options: ImportOptions) {
 
   if (options.wahooWorkoutId) {
     activity.wahooWorkoutId = options.wahooWorkoutId;
+  }
+  if (options.garminActivityId) {
+    activity.garminActivityId = options.garminActivityId;
   }
 
   const activityResult = await db.collection("activities").insertOne(activity);
