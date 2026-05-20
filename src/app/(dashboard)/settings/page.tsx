@@ -38,6 +38,12 @@ interface WahooStatus {
   lastSyncAt?: string;
 }
 
+interface StravaStatus {
+  connected: boolean;
+  connectedAt?: string;
+  lastSyncAt?: string;
+}
+
 export default function SettingsPage() {
   const { data: session } = useSession();
   const { toast } = useToast();
@@ -65,6 +71,11 @@ export default function SettingsPage() {
   const [disconnecting, setDisconnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
+  // Strava state
+  const [stravaStatus, setStravaStatus] = useState<StravaStatus | null>(null);
+  const [stravaDisconnecting, setStravaDisconnecting] = useState(false);
+  const [stravaSyncing, setStravaSyncing] = useState(false);
+
   useEffect(() => {
     fetch("/api/user/profile")
       .then((res) => res.json())
@@ -82,6 +93,10 @@ export default function SettingsPage() {
       .then((res) => res.json())
       .then((data) => { if (data.success) setWahooStatus(data.data); });
 
+    fetch("/api/integrations/strava/status")
+      .then((res) => res.json())
+      .then((data) => { if (data.success) setStravaStatus(data.data); });
+
     fetch("/api/analytics/ftp-suggestion")
       .then((res) => res.json())
       .then((data) => { if (data.success && data.data) setFtpSuggestion(data.data); });
@@ -98,6 +113,20 @@ export default function SettingsPage() {
       toast({
         title: "Errore Wahoo",
         description: "Impossibile collegare l'account Wahoo.",
+        variant: "destructive",
+      });
+    }
+
+    const stravaParam = params.get("strava");
+    if (stravaParam === "connected") {
+      toast({ title: "Strava collegato", description: "Account Strava connesso con successo!" });
+      fetch("/api/integrations/strava/status")
+        .then((res) => res.json())
+        .then((data) => { if (data.success) setStravaStatus(data.data); });
+    } else if (stravaParam === "error") {
+      toast({
+        title: "Errore Strava",
+        description: "Impossibile collegare l'account Strava.",
         variant: "destructive",
       });
     }
@@ -171,6 +200,52 @@ export default function SettingsPage() {
       toast({ title: "Errore", description: "Impossibile aprire il portale di fatturazione.", variant: "destructive" });
     } finally {
       setBillingLoading(false);
+    }
+  }
+
+  async function handleStravaDisconnect() {
+    setStravaDisconnecting(true);
+    try {
+      const res = await fetch("/api/integrations/strava/disconnect", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setStravaStatus({ connected: false });
+        toast({ title: "Strava disconnesso", description: "Account Strava disconnesso." });
+      }
+    } catch {
+      toast({ title: "Errore", description: "Errore durante la disconnessione.", variant: "destructive" });
+    } finally {
+      setStravaDisconnecting(false);
+    }
+  }
+
+  async function handleStravaSync() {
+    setStravaSyncing(true);
+    try {
+      const res = await fetch("/api/integrations/strava/sync", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        const description = data.hasMore
+          ? `Importati: ${data.imported}${data.errors ? `, errori: ${data.errors}` : ""}. Ci sono altri allenamenti da importare, clicca di nuovo.`
+          : `Importati: ${data.imported}, già presenti: ${data.skipped}${data.errors ? `, errori: ${data.errors}` : ""}`;
+        toast({
+          title: data.hasMore ? "Importazione parziale" : "Sincronizzazione completata",
+          description,
+        });
+        fetch("/api/integrations/strava/status")
+          .then((r) => r.json())
+          .then((d) => { if (d.success) setStravaStatus(d.data); });
+      } else {
+        toast({
+          title: "Errore sincronizzazione",
+          description: data.error || "Errore durante l'importazione.",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({ title: "Errore", description: "Errore di connessione.", variant: "destructive" });
+    } finally {
+      setStravaSyncing(false);
     }
   }
 
@@ -431,6 +506,75 @@ export default function SettingsPage() {
               <a href="/api/integrations/wahoo/connect">
                 <Link2 className="mr-2 h-4 w-4" />
                 Collega Wahoo
+              </a>
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Strava Integration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <RefreshCw className="h-5 w-5 text-orange-500" /> Integrazione Strava
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 text-sm text-gray-500">
+            Collega il tuo account Strava per importare automaticamente gli allenamenti in bici.
+          </p>
+          {stravaStatus?.connected ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-green-600">
+                <Link2 className="h-4 w-4" />
+                <span>Account Strava collegato</span>
+              </div>
+              {stravaStatus.connectedAt && (
+                <p className="text-xs text-gray-400">
+                  Collegato il: {new Date(stravaStatus.connectedAt).toLocaleDateString("it-IT")}
+                </p>
+              )}
+              {stravaStatus.lastSyncAt && (
+                <p className="text-xs text-gray-400">
+                  Ultima sincronizzazione:{" "}
+                  {new Date(stravaStatus.lastSyncAt).toLocaleString("it-IT")}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleStravaSync}
+                  disabled={stravaSyncing || stravaDisconnecting}
+                >
+                  {stravaSyncing ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Importa storico
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleStravaDisconnect}
+                  disabled={stravaDisconnecting || stravaSyncing}
+                  className="border-red-200 text-red-600 hover:bg-red-50"
+                >
+                  {stravaDisconnecting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Link2Off className="mr-2 h-4 w-4" />
+                  )}
+                  Disconnetti Strava
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" asChild>
+              <a href="/api/integrations/strava/connect">
+                <Link2 className="mr-2 h-4 w-4" />
+                Collega Strava
               </a>
             </Button>
           )}

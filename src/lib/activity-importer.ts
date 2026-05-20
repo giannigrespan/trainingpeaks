@@ -7,6 +7,7 @@ import {
   calculatePowerCurve,
 } from "@/lib/cycling-metrics";
 import { parseFitFile } from "@/lib/fit-parser";
+import type { StravaActivity, StravaStreams } from "@/lib/strava-client";
 
 export interface ImportOptions {
   userId: string;
@@ -130,6 +131,130 @@ export async function importFitBuffer(buffer: Buffer, options: ImportOptions) {
     lat:       downsample(parsedData.lat),
     lng:       downsample(parsedData.lng),
     laps: lapElapsed, // elapsed-seconds markers, not a 1Hz series — no downsample
+  });
+
+  return {
+    activityId: activityResult.insertedId.toString(),
+    ...activity,
+  };
+}
+
+export async function importStravaActivity(
+  summary: StravaActivity,
+  streams: StravaStreams,
+  options: { userId: string; stravaActivityId: string }
+) {
+  const db = await getDb();
+  const user = await db
+    .collection("users")
+    .findOne({ _id: new ObjectId(options.userId) });
+  const ftp = user?.ftp || 200;
+
+  const len = streams.time?.data.length ?? 0;
+  const emptyArr = () => new Array<number>(len).fill(0);
+
+  // Power: watts stream in W, clamp to physiological max
+  const rawPower = streams.watts?.data ?? emptyArr();
+  const power = rawPower.map((v) =>
+    v > 0 && v <= MAX_POWER_W ? v : 0
+  );
+
+  // Heart rate: bpm
+  const heartRate = (streams.heartrate?.data ?? emptyArr()).map((v) =>
+    v > 0 && v <= MAX_HR_BPM ? v : 0
+  );
+
+  // Cadence: rpm
+  const cadence = (streams.cadence?.data ?? emptyArr()).map((v) =>
+    v > 0 && v <= MAX_CADENCE ? v : 0
+  );
+
+  // Speed: Strava velocity_smooth in m/s → convert to km/h (consistent with FIT parser)
+  const speed = (streams.velocity_smooth?.data ?? emptyArr()).map((v) => {
+    const kmh = v * 3.6;
+    return kmh > 0 && kmh <= MAX_SPEED_KMH ? kmh : 0;
+  });
+
+  const altitude = streams.altitude?.data ?? emptyArr();
+  const distance = streams.distance?.data ?? emptyArr();
+  const lat = (streams.latlng?.data ?? []).map(([lat]) => lat);
+  const lng = (streams.latlng?.data ?? []).map(([, lng]) => lng);
+
+  // Timestamps: absolute Unix seconds
+  const startUnix = Math.floor(new Date(summary.start_date).getTime() / 1000);
+  const timestamp = (streams.time?.data ?? []).map((t) => startUnix + t);
+
+  const powerData = power.filter((p) => p > 0);
+  const np = calculateNormalizedPower(powerData);
+  const intensityFactor = calculateIntensityFactor(np, ftp);
+  const rawTss = calculateTSS(summary.moving_time, np, intensityFactor, ftp);
+  const tss = Math.min(rawTss, 500);
+  const powerCurve = calculatePowerCurve(powerData);
+
+  const movingHR = heartRate.filter((_, i) => speed[i] > 0 && heartRate[i] > 0);
+  const avgHR =
+    movingHR.length > 0
+      ? Math.round(movingHR.reduce((s, v) => s + v, 0) / movingHR.length)
+      : Math.round(
+          heartRate.filter((v) => v > 0).reduce((s, v) => s + v, 0) /
+            (heartRate.filter((v) => v > 0).length || 1)
+        );
+
+  const movingCadence = cadence.filter((_, i) => speed[i] > 0 && cadence[i] > 0);
+  const avgCadence =
+    movingCadence.length > 0
+      ? Math.round(movingCadence.reduce((s, v) => s + v, 0) / movingCadence.length)
+      : Math.round(
+          cadence.filter((v) => v > 0).reduce((s, v) => s + v, 0) /
+            (cadence.filter((v) => v > 0).length || 1)
+        );
+
+  const activity = {
+    userId: options.userId,
+    stravaActivityId: options.stravaActivityId,
+    name: summary.name,
+    activityDate: new Date(summary.start_date),
+    sport: "cycling",
+    duration: summary.elapsed_time,
+    movingTime: summary.moving_time,
+    distance: summary.distance,
+    elevationGain: summary.total_elevation_gain,
+    avgPower: Math.round(
+      powerData.reduce((s, v) => s + v, 0) / (powerData.length || 1)
+    ),
+    maxPower: powerData.reduce((max, v) => (v > max ? v : max), 0),
+    normalizedPower: np,
+    intensityFactor,
+    tss,
+    avgHR,
+    maxHR: heartRate.reduce((max, v) => (v > max ? v : max), 0),
+    avgCadence,
+    avgSpeed:
+      summary.distance > 0 && summary.moving_time > 0
+        ? summary.distance / summary.moving_time
+        : 0,
+    maxSpeed: summary.max_speed * 3.6, // m/s → km/h
+    calories: summary.calories ?? 0,
+    powerCurve,
+    createdAt: new Date(),
+  };
+
+  const activityResult = await db.collection("activities").insertOne(activity);
+
+  await db.collection("activity_streams").insertOne({
+    activityId: activityResult.insertedId.toString(),
+    activityDate: new Date(summary.start_date),
+    samplingRate: STREAM_STEP, // downsample 1Hz Strava streams to 1 per 5s
+    timestamp: downsample(timestamp),
+    power: downsample(power),
+    heartRate: downsample(heartRate),
+    cadence: downsample(cadence),
+    speed: downsample(speed),
+    altitude: downsample(altitude),
+    distance: downsample(distance),
+    lat: downsample(lat),
+    lng: downsample(lng),
+    laps: [],
   });
 
   return {
